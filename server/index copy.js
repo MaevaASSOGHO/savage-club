@@ -9,30 +9,15 @@ const http       = require("http");
 const { WebSocketServer, WebSocket } = require("ws");
 const url        = require("url");
 
-const app        = express();
-const PORT       = process.env.PORT || 3001;
+const app    = express();
+const PORT   = 3001;
 const JWT_SECRET = process.env.JWT_SECRET || "savage_club_secret_dev";
-const APP_URL    = process.env.APP_URL    || "http://localhost:3000";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || "postgresql://postgres@localhost:5432/savage_club",
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
 });
 
-const allowedOrigins = [
-  "http://localhost:3000",
-  process.env.APP_URL,
-].filter(Boolean);
-
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error(`CORS bloqué pour : ${origin}`));
-  },
-  credentials: true,
-}));
-
+app.use(cors({ origin: "http://localhost:3000", credentials: true }));
 app.use(express.json());
 
 // ─── INSCRIPTION ─────────────────────────────────────────────────
@@ -98,7 +83,7 @@ app.post('/auth/forgot-password', async (req, res) => {
         'UPDATE "User" SET "resetPasswordToken" = $1, "resetPasswordExpires" = $2 WHERE id = $3',
         [token, expiresAt, user.id]
       );
-      const resetLink = `${APP_URL}/auth/reset-password/${token}`;
+      const resetLink = `http://localhost:3000/auth/reset-password/${token}`;
       console.log(`\n🔐 RESET LINK → ${resetLink}\n`);
     }
 
@@ -163,7 +148,7 @@ app.get("/health", (req, res) => {
 // ─── WEBSOCKET SIGNALISATION WebRTC ──────────────────────────────
 // ═════════════════════════════════════════════════════════════════
 
-const rooms = new Map();
+const rooms = new Map(); // Map<bookingId, Map<userId, WebSocket>>
 
 function broadcast(bookingId, senderId, message) {
   const room = rooms.get(bookingId);
@@ -183,6 +168,7 @@ function cleanRoom(bookingId, userId) {
   if (room.size === 0) rooms.delete(bookingId);
 }
 
+// Créer le serveur HTTP depuis Express (obligatoire pour partager le port)
 const server = http.createServer(app);
 const wss    = new WebSocketServer({ server });
 
@@ -190,6 +176,7 @@ wss.on("connection", (ws, req) => {
   const parsed    = url.parse(req.url, true);
   const pathParts = parsed.pathname.split("/").filter(Boolean);
 
+  // Accepter uniquement /call/{bookingId}
   if (pathParts[0] !== "call" || !pathParts[1]) {
     ws.close(4000, "URL invalide"); return;
   }
@@ -240,6 +227,7 @@ wss.on("connection", (ws, req) => {
   });
 });
 
+// Nettoyage rooms inactives toutes les 30s
 setInterval(() => {
   for (const [bookingId, room] of rooms.entries()) {
     for (const [uid, ws] of room.entries()) {
@@ -249,11 +237,11 @@ setInterval(() => {
   }
 }, 30_000);
 
+// ─── DÉMARRAGE ────────────────────────────────────────────────────
 server.listen(PORT, () => {
   console.log(`✅ API Express     → http://localhost:${PORT}`);
   console.log(`✅ WebSocket       → ws://localhost:${PORT}/call/{bookingId}?userId={userId}`);
   console.log(`✅ Healthcheck     → http://localhost:${PORT}/health`);
-  console.log(`✅ CORS autorisé   → ${allowedOrigins.join(", ")}`);
 });
 
 process.on("SIGTERM", () => wss.close(() => server.close(() => process.exit(0))));
