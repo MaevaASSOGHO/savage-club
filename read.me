@@ -1,0 +1,183 @@
+Voir les données en base
+La façon la plus simple, lancez :
+bash npx prisma studio
+
+
+👉 Architecture → Données → API → Composants → UI
+
+prisma:query SELECT 1
+prisma:query SELECT "public"."Reel"."id", "public"."Reel"."videoUrl", "public"."Reel"."thumbnail", "public"."Reel"."caption", "public"."Reel"."duration", "public"."Reel"."userId", "public"."Reel"."createdAt" FROM "public"."Reel" WHERE 1=1 ORDER BY "public"."Reel"."createdAt" DESC LIMIT $1 OFFSET $2
+ GET /api/reels 200 in 440ms (compile: 57ms, render: 383ms)
+prisma:query SELECT "public"."Reel"."id", "public"."Reel"."videoUrl", "public"."Reel"."thumbnail", "public"."Reel"."caption", "public"."Reel"."duration", "public"."Reel"."userId", "public"."Reel"."createdAt" FROM "public"."Reel" WHERE 1=1 ORDER BY "public"."Reel"."createdAt" DESC LIMIT $1 OFFSET $2
+ GET /api/reels 200 in 6ms (compile: 1538µs, render: 5ms)
+
+Request URL
+http://localhost:3000/api/reels
+Request method
+GET
+Status code
+200 OK
+Remote address
+[::1]:3000
+Referrer policy
+strict-origin-when-cross-origin
+
+la table Reel 0 enregistrement
+
+dynamisons tout ça 
+
+// components/profile/ProfileActions.tsx
+"use client";
+
+import { useRouter } from "next/navigation";
+
+type Props = {
+  userId: string;
+  username: string;
+};
+
+export default function ProfileActions({ userId, username }: Props) {
+  const router = useRouter();
+
+  return (
+    <div className="flex gap-2 mb-6 flex-wrap">
+
+      {/* S'abonner */}
+      <button className="flex-1 bg-amber-400 hover:bg-amber-300 text-black font-bold text-sm py-2.5 rounded-xl transition-all min-w-[100px]">
+        S'abonner
+      </button>
+
+      {/* Message */}
+      <button
+        onClick={() => router.push(`/messages?user=${username}`)}
+        className="flex items-center gap-2 bg-white/8 hover:bg-white/12 border border-white/10 text-white text-sm font-medium py-2.5 px-4 rounded-xl transition-all"
+        title="Envoyer un message"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+        </svg>
+        <span>Message</span>
+      </button>
+
+      {/* Appel audio */}
+      <button
+        className="bg-white/8 hover:bg-white/12 border border-white/10 text-white p-2.5 rounded-xl transition-all"
+        title="Appel audio"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8a19.79 19.79 0 01-3.07-8.67A2 2 0 012 .18h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" />
+        </svg>
+      </button>
+
+      {/* Appel vidéo */}
+      <button
+        className="bg-white/8 hover:bg-white/12 border border-white/10 text-white p-2.5 rounded-xl transition-all"
+        title="Appel vidéo"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M15 10l4.553-2.07A1 1 0 0121 8.845v6.31a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+        </svg>
+      </button>
+
+      {/* Contenu personnalisé */}
+      <button className="w-full bg-white/5 hover:bg-white/8 border border-white/10 text-white/70 hover:text-white text-sm py-2.5 rounded-xl transition-all mt-1">
+        Demander un contenu personnalisé
+      </button>
+
+    </div>
+  );
+}
+
+
+COULEUR CLAIRE  bg-[#3B0764]
+
+// app/api/media/[id]/route.ts
+
+CE QUE CE CODE FAIT (TRÈS IMPORTANT)
+✔ Vérifie :
+
+utilisateur connecté (NextAuth)
+
+abonnement actif
+
+propriétaire du contenu
+
+✔ Empêche :
+
+accès direct au fichier
+
+partage d’URL
+
+téléchargement simple
+
+✔ Active :
+
+streaming (comme Netflix)
+
+chargement fluide
+
+Explication du schedule :
+
+"0 2 * * *" = Tous les jours à 2h00 du matin
+
+Vous pouvez ajuster selon vos besoins :
+
+"0 0 * * 0" = Tous les dimanches à minuit
+
+"0 0 1 * *" = Le 1er de chaque mois à minuit
+
+"0 3 * * *" = Tous les jours à 3h00
+
+
+
+// Exemple d'utilisation dans un post
+import ReportButton from "@/components/ReportButton";
+
+// Dans votre composant Post
+<div className="flex items-center gap-2">
+  <ReportButton type="post" id={post.id} />
+  {/* Autres boutons d'action */}
+</div>
+
+// Dans un profil utilisateur
+<ReportButton type="user" id={user.id} />
+
+// Dans un commentaire
+<ReportButton type="comment" id={comment.id} />
+
+<Link
+          href="/create"
+          className="fixed bottom-8 right-8 bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-full shadow-xl"
+        >
+          Créer
+        </Link>
+
+
+BORDURE SIDE BAR 
+
+          transition-all duration-300 bg-[#1a0533]/95 backdrop-blur-xl border-r border-white/10 flex flex-col`}>
+
+Je peux te transformer ça en :
+
+⚡ compteur live (sans refresh)
+🔥 animation quand ça change (+1 follower)
+
+BOUTON VIOLET CLAIR : bg-gradient-to-r from-[#C9A3FF] to-[#A37DFF] text-[#1A0B2E] font-medium rounded-xl hover:opacity-90 transition-opacity
+
+<button
+          onClick={() => {
+            setEditingCollection(null);
+            setIsDialogOpen(true);
+          }}
+          className="px-6 py-3 bg-gradient-to-r from-[#C9A3FF] to-[#A37DFF] text-[#1A0B2E] font-medium rounded-xl hover:opacity-90 transition-opacity"
+        >
+          + Nouvelle collection
+        </button>
+
+🧠 RÈGLE ABSOLUE (retient ça)
+Dossier	Type
+[id]	{ id: string }
+[postId]	{ postId: string }
+
+npx prisma db pull
+npx prisma generate
