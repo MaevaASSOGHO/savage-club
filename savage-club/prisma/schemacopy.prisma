@@ -1,0 +1,512 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// USER
+// ─────────────────────────────────────────
+model User {
+  id            String    @id @default(uuid())
+  username      String    @unique
+  displayName   String?
+  email         String    @unique
+  password      String
+  avatar        String?
+  bio           String?
+  isVerified    Boolean   @default(false)
+  role          Role      @default(USER)
+
+  posts         Post[]
+  comments      Comment[]
+  likes         Like[]
+  reactions  Reaction[]
+  reels         Reel[]
+  savedPosts    SavedPost[]
+  collections Collection[]
+
+  followers     Follow[]    @relation("Following") // ceux qui me suivent
+  following     Follow[]    @relation("Follower")  // ceux que je suis
+
+  notifications       Notification[] @relation("NotificationReceiver")
+  notificationsSent   Notification[] @relation("NotificationSender")
+
+  reports       Report[]    @relation("Reporter")
+  reportedPosts Report[]    @relation("ReportedUser")
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  category          String?        // ex: "Cuisine", "Fitness", "Tech"
+  subscriptionPrice Int?           // prix en centimes ex: 999 = 9,99€
+  subscriptionVIP   Int?           // prix VIP
+  audioCallPrice  Int?
+  videoCallPrice  Int?
+  messagePrice    Int?
+  location          String?        // "Abidjan, Côte d'Ivoire"
+  website           String?        // lien externe
+  socialLinks       Json?          // { instagram, tiktok, youtube, ... }
+  idVerified        Boolean        @default(false)  // pièce d'identité validée
+  idDocumentUrl     String?        // URL du document uploadé
+
+  subscriptions    Subscription[] @relation("UserSubscriptions")
+  subscribers      Subscription[] @relation("CreatorSubscribers")
+  payments         Payment[]      @relation("UserPayments")
+  receivedPayments Payment[]      @relation("CreatorPayments")
+  bookingsAsRequester Booking[] @relation("BookingRequester")
+  bookingsAsCreator   Booking[] @relation("BookingCreator")
+  sentMessages             Message[]                 @relation("SentMessages")
+  conversationParticipants ConversationParticipant[]
+
+}
+
+enum Role {
+  USER
+  CREATOR
+  TRAINER
+  ADMIN
+}
+
+// ─────────────────────────────────────────
+// POST
+// ─────────────────────────────────────────
+model Post {
+  id           String   @id @default(uuid())
+
+  content      String?
+  medias     PostMedia[]
+
+  category     String?
+
+  visibility   PostVisibility @default(PUBLIC)
+
+  price        Int?
+  currency     String?
+
+  isLocked     Boolean   @default(false)
+
+  status       PostStatus @default(PUBLISHED)
+
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  comments     Comment[]
+  likes        Like[]
+  reactions  Reaction[]
+  Notifications Notification[]
+  savedBy      SavedPost[]
+  reports      Report[]
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  GALLERY
+}
+
+enum PostVisibility {
+  PUBLIC
+  SUBSCRIBERS
+  PAID
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model PostMedia {
+  id        String    @id @default(uuid())
+  url       String
+  type      MediaType             // IMAGE | VIDEO
+  order     Int       @default(0) // ordre d'affichage dans le carousel
+  postId    String
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+}
+// ─────────────────────────────────────────
+// COMMENT
+// ─────────────────────────────────────────
+model Comment {
+  id        String    @id @default(uuid())
+  text      String
+
+  userId    String
+  postId    String
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  // Réponses imbriquées
+  parentId  String?
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies   Comment[] @relation("CommentReplies")
+
+  likes     Like[]
+  Notifications Notification[]
+
+  createdAt DateTime  @default(now())
+}
+
+// ─────────────────────────────────────────
+// LIKE  (posts + commentaires)
+// ─────────────────────────────────────────
+model Like {
+  id        String   @id @default(uuid())
+
+  userId    String
+  postId    String?
+  commentId String?
+  reelId    String?
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment   Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  reel      Reel?    @relation(fields: [reelId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+  @@unique([userId, commentId])
+  @@unique([userId, reelId])
+}
+
+model Reaction {
+  id        String  @id @default(uuid())
+  type      String  // "SPARKLE" | "IDEA"
+
+  userId    String
+  postId    String
+
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId, type])
+}
+
+// ─────────────────────────────────────────
+// FOLLOW
+// ─────────────────────────────────────────
+model Follow {
+  id          String   @id @default(uuid())
+
+  followerId  String
+  followingId String
+
+  follower    User     @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+
+  @@unique([followerId, followingId])
+}
+
+// ─────────────────────────────────────────
+// REEL
+// ─────────────────────────────────────────
+model Reel {
+  id          String    @id @default(uuid())
+  videoUrl    String
+  thumbnail   String?
+  caption     String?
+  duration    Int?      // en secondes
+
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  likes       Like[]
+  Notifications Notification[]
+
+  createdAt   DateTime  @default(now())
+}
+
+// ─────────────────────────────────────────
+// SAVED POSTS (Ma liste)
+// ─────────────────────────────────────────
+model SavedPost {
+  id        String   @id @default(uuid())
+  userId    String
+  postId    String
+  collectionId String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  collection   Collection? @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+  @@index([userId])
+  @@index([postId])
+ }
+
+model Collection {
+  id        String   @id @default(cuid())
+  name      String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  posts     SavedPost[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, name])
+}
+// ─────────────────────────────────────────
+// NOTIFICATION
+// ─────────────────────────────────────────
+model Notification {
+  id          String           @id @default(uuid())
+  type        NotificationType
+  message     String?
+  isRead      Boolean          @default(false)
+
+  // Qui reçoit la notification
+  receiverId  String
+  receiver    User             @relation("NotificationReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  // Qui a déclenché la notification (ex: celui qui a liké)
+  senderId    String?
+  sender      User?            @relation("NotificationSender", fields: [senderId], references: [id], onDelete: SetNull)
+
+  // Référence optionnelle vers la ressource concernée
+  postId      String?
+  post        Post?            @relation(fields: [postId], references: [id], onDelete: SetNull)
+  
+  commentId   String?
+  comment     Comment?         @relation(fields: [commentId], references: [id], onDelete: SetNull)
+  
+  reelId      String?
+  reel        Reel?            @relation(fields: [reelId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime         @default(now())
+}
+
+enum NotificationType {
+  LIKE          // quelqu'un a aimé ton post
+  COMMENT       // quelqu'un a commenté ton post
+  FOLLOW        // quelqu'un t'a suivi
+  MENTION       // quelqu'un t'a mentionné
+  REPLY         // quelqu'un a répondu à ton commentaire
+  REEL_LIKE     // quelqu'un a aimé ton réel
+  MESSAGE       // nouveau message
+  BOOKING       // nouvelle réservation
+  BOOKING_CONFIRMED 
+  BOOKING_CANCELLED
+}
+
+// ─────────────────────────────────────────
+// MESSAGES & CONVERSATIONS
+// ─────────────────────────────────────────
+enum ConversationType {
+  SAVAGE         // abonné Savage
+  VIP            // abonné VIP
+  CUSTOM_CONTENT // demande de contenu personnalisé
+  DIRECT         // membre standard
+ }
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+ }
+
+model Conversation {
+  id           String                    @id @default(uuid())
+
+  type         ConversationType @default(DIRECT)
+  lastMessageAt DateTime        @default(now())
+
+   @@index([lastMessageAt])
+  participants ConversationParticipant[]
+  messages     Message[]
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+}
+
+model ConversationParticipant {
+  id             String       @id @default(uuid())
+  conversationId String
+  userId         String
+  unreadCount    Int          @default(0)
+  lastReadAt     DateTime?
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+  @@index([conversationId])
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  text           String?
+  mediaUrl       String?
+  mediaType      MessageType  @default(TEXT)
+  content        String
+  isRead         Boolean      @default(false)
+
+  senderId       String
+  conversationId String
+
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+}
+
+// ─────────────────────────────────────────
+// REPORT (Signalement)
+// ─────────────────────────────────────────
+model Report {
+  id           String       @id @default(uuid())
+  reason       String
+  status       ReportStatus @default(PENDING)
+
+  reporterId   String
+  reporter     User         @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  postId       String?
+  post         Post?        @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  reportedUserId String?
+  reportedUser   User?      @relation("ReportedUser", fields: [reportedUserId], references: [id], onDelete: SetNull)
+
+  createdAt    DateTime     @default(now())
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+  DISMISSED
+}
+
+ enum SubscriptionTier {
+   FREE
+   SAVAGE
+   VIP
+ }
+
+ enum SubscriptionStatus {
+   ACTIVE
+   CANCELLED
+   EXPIRED
+ }
+
+ enum PaymentStatus {
+   PENDING
+   SUCCESS
+   FAILED
+   REFUNDED
+ }
+
+ enum PaymentType {
+   SUBSCRIPTION       
+   MESSAGE             
+   AUDIO_CALL          
+   VIDEO_CALL         
+   CUSTOM_CONTENT     
+ }
+
+  model Subscription {
+   id          String             @id @default(uuid())
+   tier        SubscriptionTier
+   status      SubscriptionStatus @default(ACTIVE)
+   startedAt   DateTime           @default(now())
+   renewsAt    DateTime?          // prochaine date de renouvellement
+   cancelledAt DateTime?
+
+   subscriberId String
+   subscriber   User     @relation("UserSubscriptions", fields: [subscriberId], references: [id], onDelete: Cascade)
+
+   creatorId    String
+   creator      User     @relation("CreatorSubscribers", fields: [creatorId], references: [id], onDelete: Cascade)
+
+   payments     Payment[]
+
+   createdAt    DateTime @default(now())
+   updatedAt    DateTime @updatedAt
+
+   @@unique([subscriberId, creatorId])   // un seul abonnement par paire
+   @@index([subscriberId])
+   @@index([creatorId])
+   @@index([status])
+ }
+
+ model Payment {
+   id             String        @id @default(uuid())
+   amount         Int            // montant en FCFA
+   status         PaymentStatus @default(PENDING)
+   type           PaymentType
+   description    String?       // ex: "Abonnement Savage - Mars 2026"
+   reference      String?        // référence paiement externe (CinetPay, etc.)
+
+  //  Payeur
+   payerId        String
+   payer          User          @relation("UserPayments", fields: [payerId], references: [id])
+
+  // Bénéficiaire (créateur)
+   recipientId    String
+   recipient      User          @relation("CreatorPayments", fields: [recipientId], references: [id])
+
+  //  Lié à un abonnement (optionnel, null pour paiements one-shot)
+   subscriptionId String?
+   subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+
+   createdAt      DateTime      @default(now())
+
+   @@index([payerId])
+   @@index([recipientId])
+   @@index([subscriptionId])
+   @@index([status])
+ }
+ enum BookingType {
+   AUDIO_CALL
+   VIDEO_CALL
+ }
+ enum BookingStatus {
+   PENDING_PAYMENT   // créneau choisi, paiement en attente
+   PENDING_CONFIRM   // payé, en attente de confirmation créateur
+   CONFIRMED         // créateur a confirmé
+   CANCELLED         // annulé
+   COMPLETED         // terminé
+ }
+
+ model Booking {
+   id          String        @id @default(uuid())
+   type        BookingType
+   status      BookingStatus @default(PENDING_PAYMENT)
+   scheduledAt DateTime      // créneau choisi
+   duration    Int           @default(10) // minutes
+   amount      Int           // prix en FCFA
+   reference   String?       // référence paiement simulé
+   note        String?       // message optionnel du demandeur
+
+   requesterId String
+   requester   User          @relation("BookingRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+
+   creatorId   String
+   creator     User          @relation("BookingCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+
+   createdAt   DateTime      @default(now())
+   updatedAt   DateTime      @updatedAt
+
+   @@index([requesterId])
+   @@index([creatorId])
+   @@index([status])
+   @@index([scheduledAt])
+ }

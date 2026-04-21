@@ -1,0 +1,562 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Booking {
+  id                             String        @id
+  type                           BookingType
+  status                         BookingStatus @default(PENDING_PAYMENT)
+  scheduledAt                    DateTime
+  duration                       Int           @default(10)
+  amount                         Int
+  reference                      String?
+  note                           String?
+  requesterId                    String
+  creatorId                      String
+  createdAt                      DateTime      @default(now())
+  updatedAt                      DateTime
+  counterProposedAt              DateTime?
+  counterRepliedAt               DateTime?
+  negotiationCount               Int           @default(0)
+  counterProposedBy              String?
+  User_Booking_creatorIdToUser   User          @relation("Booking_creatorIdToUser", fields: [creatorId], references: [id], onDelete: Cascade)
+  User_Booking_requesterIdToUser User          @relation("Booking_requesterIdToUser", fields: [requesterId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId])
+  @@index([requesterId])
+  @@index([scheduledAt])
+  @@index([status])
+}
+
+model Collection {
+  id        String      @id
+  name      String
+  userId    String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime
+  User      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  SavedPost SavedPost[]
+
+  @@unique([userId, name])
+}
+
+model Comment {
+  id            String         @id
+  text          String
+  userId        String
+  postId        String
+  parentId      String?
+  createdAt     DateTime       @default(now())
+  Comment       Comment?       @relation("CommentToComment", fields: [parentId], references: [id])
+  other_Comment Comment[]      @relation("CommentToComment")
+  Post          Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
+  User          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Like          Like[]
+  Notification  Notification[]
+}
+
+model Conversation {
+  id                      String                    @id
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime
+  type                    ConversationType          @default(DIRECT)
+  lastMessageAt           DateTime                  @default(now())
+  expiresAt               DateTime?
+  ConversationParticipant ConversationParticipant[]
+  Message                 Message[]
+
+  @@index([lastMessageAt])
+}
+
+model ConversationParticipant {
+  id             String       @id
+  conversationId String
+  userId         String
+  unreadCount    Int          @default(0)
+  lastReadAt     DateTime?
+  Conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  User           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([conversationId])
+  @@index([userId])
+}
+
+model CreatorAgreement {
+  id         String   @id @default(dbgenerated("gen_random_uuid()"))
+  userId     String
+  version    String   @default("1.0")
+  acceptedAt DateTime @default(now())
+  User       User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([userId, version])
+}
+
+model Follow {
+  id                            String   @id
+  followerId                    String
+  followingId                   String
+  createdAt                     DateTime @default(now())
+  User_Follow_followerIdToUser  User     @relation("Follow_followerIdToUser", fields: [followerId], references: [id], onDelete: Cascade)
+  User_Follow_followingIdToUser User     @relation("Follow_followingIdToUser", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+}
+
+model Like {
+  id        String   @id
+  userId    String
+  postId    String?
+  commentId String?
+  reelId    String?
+  createdAt DateTime @default(now())
+  Comment   Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  Post      Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  Reel      Reel?    @relation(fields: [reelId], references: [id], onDelete: Cascade)
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, commentId])
+  @@unique([userId, postId])
+  @@unique([userId, reelId])
+}
+
+model MediaView {
+  id        String   @id
+  userId    String
+  postId    String
+  token     String   @unique
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([postId])
+  @@index([token])
+  @@index([userId])
+}
+
+model Message {
+  id                 String       @id
+  content            String
+  isRead             Boolean      @default(false)
+  senderId           String
+  conversationId     String
+  createdAt          DateTime     @default(now())
+  mediaUrl           String?
+  mediaType          MessageType  @default(TEXT)
+  iv                 String?
+  deletedForSender   Boolean      @default(false)
+  deletedForEveryone Boolean      @default(false)
+  price              Int?
+  isUnlocked         Boolean      @default(false)
+  Conversation       Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  User               User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+}
+
+model Notification {
+  id                                 String           @id
+  type                               NotificationType
+  message                            String?
+  isRead                             Boolean          @default(false)
+  receiverId                         String
+  senderId                           String?
+  postId                             String?
+  commentId                          String?
+  reelId                             String?
+  createdAt                          DateTime         @default(now())
+  bookingId                          String?
+  reason                             String?
+  Comment                            Comment?         @relation(fields: [commentId], references: [id])
+  Post                               Post?            @relation(fields: [postId], references: [id])
+  User_Notification_receiverIdToUser User             @relation("Notification_receiverIdToUser", fields: [receiverId], references: [id], onDelete: Cascade)
+  Reel                               Reel?            @relation(fields: [reelId], references: [id])
+  User_Notification_senderIdToUser   User?            @relation("Notification_senderIdToUser", fields: [senderId], references: [id])
+}
+
+model Payment {
+  id                             String              @id
+  amount                         Int
+  status                         PaymentStatus       @default(PENDING)
+  type                           PaymentType
+  description                    String?
+  reference                      String?
+  payerId                        String
+  recipientId                    String
+  subscriptionId                 String?
+  createdAt                      DateTime            @default(now())
+  provider                       PaymentProvider     @default(STRIPE)
+  providerRef                    String?
+  platformFee                    Int                 @default(0)
+  creatorAmount                  Int                 @default(0)
+  User_Payment_payerIdToUser     User                @relation("Payment_payerIdToUser", fields: [payerId], references: [id])
+  User_Payment_recipientIdToUser User                @relation("Payment_recipientIdToUser", fields: [recipientId], references: [id])
+  Subscription                   Subscription?       @relation(fields: [subscriptionId], references: [id])
+  WalletTransaction              WalletTransaction[]
+
+  @@index([payerId])
+  @@index([recipientId])
+  @@index([status])
+  @@index([subscriptionId])
+}
+
+model Post {
+  id           String         @id
+  content      String?
+  category     String?
+  userId       String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime
+  currency     String?
+  isLocked     Boolean        @default(false)
+  price        Int?
+  status       PostStatus     @default(PUBLISHED)
+  visibility   PostVisibility @default(PUBLIC)
+  Comment      Comment[]
+  Like         Like[]
+  Notification Notification[]
+  User         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  PostMedia    PostMedia[]
+  Reaction     Reaction[]
+  Report       Report[]
+  SavedPost    SavedPost[]
+}
+
+model PostMedia {
+  id        String    @id
+  url       String
+  type      MediaType
+  order     Int       @default(0)
+  postId    String
+  createdAt DateTime  @default(now())
+  Post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+}
+
+model Reaction {
+  id        String   @id
+  type      String
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+  Post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId, type])
+}
+
+model Reel {
+  id           String         @id
+  videoUrl     String
+  thumbnail    String?
+  caption      String?
+  duration     Int?
+  userId       String
+  createdAt    DateTime       @default(now())
+  Like         Like[]
+  Notification Notification[]
+  User         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Report {
+  id                               String       @id
+  reason                           String
+  status                           ReportStatus @default(PENDING)
+  reporterId                       String
+  postId                           String?
+  reportedUserId                   String?
+  createdAt                        DateTime     @default(now())
+  Post                             Post?        @relation(fields: [postId], references: [id], onDelete: Cascade)
+  User_Report_reportedUserIdToUser User?        @relation("Report_reportedUserIdToUser", fields: [reportedUserId], references: [id])
+  User_Report_reporterIdToUser     User         @relation("Report_reporterIdToUser", fields: [reporterId], references: [id], onDelete: Cascade)
+}
+
+model SavedPost {
+  id           String      @id
+  userId       String
+  postId       String
+  createdAt    DateTime    @default(now())
+  collectionId String?
+  Collection   Collection? @relation(fields: [collectionId], references: [id])
+  Post         Post        @relation(fields: [postId], references: [id], onDelete: Cascade)
+  User         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([postId])
+  @@index([userId])
+}
+
+model Subscription {
+  id                                   String             @id
+  tier                                 SubscriptionTier
+  status                               SubscriptionStatus @default(ACTIVE)
+  startedAt                            DateTime           @default(now())
+  renewsAt                             DateTime?
+  cancelledAt                          DateTime?
+  subscriberId                         String
+  creatorId                            String
+  createdAt                            DateTime           @default(now())
+  updatedAt                            DateTime
+  Payment                              Payment[]
+  User_Subscription_creatorIdToUser    User               @relation("Subscription_creatorIdToUser", fields: [creatorId], references: [id], onDelete: Cascade)
+  User_Subscription_subscriberIdToUser User               @relation("Subscription_subscriberIdToUser", fields: [subscriberId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriberId, creatorId])
+  @@index([creatorId])
+  @@index([status])
+  @@index([subscriberId])
+}
+
+model User {
+  id                                           String                    @id
+  username                                     String                    @unique
+  email                                        String                    @unique
+  password                                     String
+  avatar                                       String?
+  bio                                          String?
+  isVerified                                   Boolean                   @default(false)
+  role                                         Role                      @default(USER)
+  createdAt                                    DateTime                  @default(now())
+  updatedAt                                    DateTime
+  category                                     String?
+  idDocumentUrl                                String?
+  idVerified                                   Boolean                   @default(false)
+  location                                     String?
+  socialLinks                                  Json?
+  subscriptionPrice                            Int?
+  subscriptionVIP                              Int?
+  website                                      String?
+  displayName                                  String?
+  audioCallPrice                               Int?
+  messagePrice                                 Int?
+  videoCallPrice                               Int?
+  resetPasswordToken                           String?                   @db.VarChar(255)
+  resetPasswordExpires                         BigInt?
+  acceptedCGUAt                                DateTime?                 @db.Timestamp(6)
+  selfieUrl                                    String?
+  verificationStatus                           String                    @default("NONE")
+  Booking_Booking_creatorIdToUser              Booking[]                 @relation("Booking_creatorIdToUser")
+  Booking_Booking_requesterIdToUser            Booking[]                 @relation("Booking_requesterIdToUser")
+  Collection                                   Collection[]
+  Comment                                      Comment[]
+  ConversationParticipant                      ConversationParticipant[]
+  CreatorAgreement                             CreatorAgreement[]
+  Follow_Follow_followerIdToUser               Follow[]                  @relation("Follow_followerIdToUser")
+  Follow_Follow_followingIdToUser              Follow[]                  @relation("Follow_followingIdToUser")
+  Like                                         Like[]
+  MediaView                                    MediaView[]
+  Message                                      Message[]
+  Notification_Notification_receiverIdToUser   Notification[]            @relation("Notification_receiverIdToUser")
+  Notification_Notification_senderIdToUser     Notification[]            @relation("Notification_senderIdToUser")
+  Payment_Payment_payerIdToUser                Payment[]                 @relation("Payment_payerIdToUser")
+  Payment_Payment_recipientIdToUser            Payment[]                 @relation("Payment_recipientIdToUser")
+  Post                                         Post[]
+  Reaction                                     Reaction[]
+  Reel                                         Reel[]
+  Report_Report_reportedUserIdToUser           Report[]                  @relation("Report_reportedUserIdToUser")
+  Report_Report_reporterIdToUser               Report[]                  @relation("Report_reporterIdToUser")
+  SavedPost                                    SavedPost[]
+  Subscription_Subscription_creatorIdToUser    Subscription[]            @relation("Subscription_creatorIdToUser")
+  Subscription_Subscription_subscriberIdToUser Subscription[]            @relation("Subscription_subscriberIdToUser")
+  Wallet                                       Wallet?
+
+  @@index([verificationStatus], map: "idx_user_verification_status")
+}
+
+model Wallet {
+  id                String              @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId            String              @unique
+  balance           Int                 @default(0)
+  pending           Int                 @default(0)
+  totalEarned       Int                 @default(0)
+  totalWithdrawn    Int                 @default(0)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @default(now())
+  User              User                @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  WalletTransaction WalletTransaction[]
+  Withdrawal        Withdrawal[]
+}
+
+model WalletTransaction {
+  id          String         @id @default(dbgenerated("(gen_random_uuid())::text"))
+  walletId    String
+  amount      Int
+  type        WalletTxType
+  status      WalletTxStatus @default(COMPLETED)
+  paymentId   String?
+  description String?
+  createdAt   DateTime       @default(now())
+  Payment     Payment?       @relation(fields: [paymentId], references: [id], onUpdate: NoAction)
+  Wallet      Wallet         @relation(fields: [walletId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([paymentId])
+  @@index([walletId])
+}
+
+model Withdrawal {
+  id          String           @id @default(dbgenerated("(gen_random_uuid())::text"))
+  walletId    String
+  amount      Int
+  fee         Int              @default(0)
+  net         Int
+  status      WithdrawalStatus @default(PENDING)
+  method      WithdrawalMethod
+  phoneNumber String?
+  reference   String?
+  processedAt DateTime?
+  createdAt   DateTime         @default(now())
+  Wallet      Wallet           @relation(fields: [walletId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([status])
+  @@index([walletId])
+}
+
+enum BookingStatus {
+  PENDING_PAYMENT
+  PENDING_CONFIRM
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  COUNTER_PROPOSED
+  COUNTER_REPLIED
+}
+
+enum BookingType {
+  AUDIO_CALL
+  VIDEO_CALL
+}
+
+enum ConversationType {
+  SAVAGE
+  VIP
+  CUSTOM_CONTENT
+  DIRECT
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  GALLERY
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+}
+
+enum NotificationType {
+  LIKE
+  COMMENT
+  FOLLOW
+  MENTION
+  REPLY
+  REEL_LIKE
+  MESSAGE
+  BOOKING
+  BOOKING_CONFIRMED
+  BOOKING_CANCELLED
+  BOOKING_RESCHEDULE
+  BOOKING_REMINDER
+  BOOKING_START
+  IDENTITY_VERIFIED
+  IDENTITY_REJECTED
+}
+
+enum PaymentProvider {
+  STRIPE
+  MONEYFUSION
+  WALLET
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum PaymentType {
+  SUBSCRIPTION
+  MESSAGE
+  AUDIO_CALL
+  VIDEO_CALL
+  CUSTOM_CONTENT
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum PostVisibility {
+  PUBLIC
+  SUBSCRIBERS
+  PAID
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+  DISMISSED
+}
+
+enum Role {
+  USER
+  CREATOR
+  TRAINER
+  ADMIN
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+enum SubscriptionTier {
+  SAVAGE
+  VIP
+  FREE
+}
+
+enum WalletTxStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+enum WalletTxType {
+  SUBSCRIPTION_EARNING
+  PPV_EARNING
+  BOOKING_EARNING
+  TIP_EARNING
+  COMMISSION_DEDUCTION
+  WITHDRAWAL
+  REFUND
+}
+
+enum WithdrawalMethod {
+  WAVE
+  ORANGE_MONEY
+  MTN_MOMO
+  STRIPE
+  BANK_TRANSFER
+}
+
+enum WithdrawalStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REJECTED
+}

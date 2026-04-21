@@ -1,0 +1,111 @@
+// app/post/[id]/page.tsx
+import { prisma } from "@/lib/prisma";
+import { notFound } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import Sidebar from "@/components/Sidebar";
+import PostDetail from "@/components/PostDetail";
+
+export default async function PostPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const session = await getServerSession(authOptions);
+
+  const post = await prisma.post.findUnique({
+    where: { id },
+    include: {
+      User: {
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          avatar: true,
+          isVerified: true,
+          role: true,
+        },
+      },
+      PostMedia: { orderBy: { order: "asc" } },
+      Like: { select: { id: true, userId: true } },
+      Comment: {
+        include: {
+          User: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatar: true,
+              isVerified: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  if (!post) notFound();
+
+  // État initial du viewer
+  let viewerLiked = false;
+  let viewerSaved = false;
+  let viewerId: string | null = null;
+
+  if (session?.user?.email) {
+    const viewer = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true },
+    });
+    if (viewer) {
+      viewerId = viewer.id;
+      viewerLiked = post.Like.some((l) => l.userId === viewer.id);
+      const saved = await prisma.savedPost.findUnique({
+        where: { userId_postId: { userId: viewer.id, postId: id } },
+      });
+      viewerSaved = !!saved;
+    }
+  }
+
+  return (
+    <div className="flex min-h-screen bg-[#1a0533]">
+      <Sidebar />
+      <main className="flex-1 flex items-center justify-center min-h-screen">
+        <PostDetail
+          post={{
+            id:         post.id,
+            content:    post.content ?? "",
+            createdAt:  post.createdAt.toISOString(),
+            visibility: post.visibility,
+            medias:     post.PostMedia,
+            likes:      post.Like,
+            user: {
+              id:          post.User.id,
+              username:    post.User.username,
+              displayName: post.User.displayName,
+              avatar:      post.User.avatar,
+              isVerified:  post.User.isVerified,
+              role:        post.User.role,
+            },
+            comments: post.Comment.map((c) => ({
+              id:        c.id,
+              text:      c.text,
+              createdAt: c.createdAt.toISOString(),
+              user: {
+                id:          c.User.id,
+                username:    c.User.username,
+                displayName: c.User.displayName,
+                avatar:      c.User.avatar,
+                isVerified:  c.User.isVerified,
+              },
+            })),
+          }}
+          viewerLiked={viewerLiked}
+          viewerSaved={viewerSaved}
+          viewerId={viewerId}
+        />
+      </main>
+    </div>
+  );
+}
