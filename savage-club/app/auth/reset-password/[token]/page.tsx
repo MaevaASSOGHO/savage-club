@@ -1,11 +1,11 @@
 // app/auth/reset-password/[token]/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-export default function ResetPasswordPage({ params }: { params: { token: string } }) {
+export default function ResetPasswordPage({ params }: { params: Promise<{ token: string }> }) {
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -14,6 +14,11 @@ export default function ResetPasswordPage({ params }: { params: { token: string 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [token, setToken] = useState("");
+
+  useEffect(() => {
+    params.then((p) => setToken(p.token));
+  }, [params]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,7 +42,7 @@ export default function ResetPasswordPage({ params }: { params: { token: string 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          token: params.token,
+          token: token,
           password 
         }),
       });
