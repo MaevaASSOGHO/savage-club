@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     }
 
     // Appeler votre API backend
-    const res = await fetch(`${API_URL}/auth/reset-password`, {
+    const res = await fetch(`${API_URL}/auth/reset-password/${token}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token, password }),

@@ -15,7 +15,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Le mot de passe doit contenir au moins 6 caractères" }, { status: 400 });
     }
 
-    const res = await fetch(`${API_URL}/auth/reset-password/${token}`, {
+const res = await fetch(`${API_URL}/auth/reset-password/auth/reset-password/${token}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password }),
