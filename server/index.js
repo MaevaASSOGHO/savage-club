@@ -111,6 +111,8 @@ app.post('/auth/forgot-password', async (req, res) => {
 
 // ─── RÉINITIALISATION DU MOT DE PASSE ────────────────────────────
 app.post('/auth/reset-password/:token', async (req, res) => {
+  console.log("Body reçu:", req.body);
+  console.log("Token:", req.params.token);
   try {
     const { token } = req.params;
     const { password } = req.body;
