@@ -11,29 +11,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Token et mot de passe requis" }, { status: 400 });
     }
 
-    const url = `${API_URL}/auth/reset-password/${token}`;
-    console.log("URL appelée:", url);
+    if (password.length < 6) {
+      return NextResponse.json({ error: "Le mot de passe doit contenir au moins 6 caractères" }, { status: 400 });
+    }
 
-    const res = await fetch(url, {
+    const res = await fetch(`${API_URL}/auth/reset-password/${token}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password }),
     });
 
-    const text = await res.text();
-    console.log("Réponse brute:", text);
-
-    let data;
-    try { data = JSON.parse(text); }
-    catch { return NextResponse.json({ error: "Réponse invalide du serveur" }, { status: 500 }); }
+    const data = await res.json();
 
     if (!res.ok) {
       return NextResponse.json({ error: data.error || "Erreur" }, { status: res.status });
     }
 
-    return NextResponse.json(data);
-  } catch (err: any) {
-    console.error("Reset password error:", err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ message: "Mot de passe réinitialisé avec succès" });
+
+  } catch (error: any) {
+    console.error("Reset password error:", error);
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
 }
