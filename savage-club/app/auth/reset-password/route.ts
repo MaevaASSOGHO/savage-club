@@ -1,8 +1,8 @@
-import { NextResponse } from "next/dist/server/web/spec-extension/response";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-
 // app/api/auth/reset-password/route.ts
+import { NextResponse } from "next/server";
+
+const API_URL = process.env.API_URL || "http://localhost:3001";
+
 export async function POST(req: Request) {
   try {
     const { token, password } = await req.json();
@@ -12,8 +12,6 @@ export async function POST(req: Request) {
     }
 
     const url = `${API_URL}/auth/reset-password/${token}`;
-    console.log("Calling:", url);
-    console.log("Token reçu:", token);
     console.log("URL appelée:", url);
 
     const res = await fetch(url, {
@@ -22,9 +20,12 @@ export async function POST(req: Request) {
       body: JSON.stringify({ password }),
     });
 
-    console.log("Response status:", res.status);
-    const data = await res.json();
-    console.log("Response data:", data);
+    const text = await res.text();
+    console.log("Réponse brute:", text);
+
+    let data;
+    try { data = JSON.parse(text); }
+    catch { return NextResponse.json({ error: "Réponse invalide du serveur" }, { status: 500 }); }
 
     if (!res.ok) {
       return NextResponse.json({ error: data.error || "Erreur" }, { status: res.status });
