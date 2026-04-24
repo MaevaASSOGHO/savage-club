@@ -53,8 +53,8 @@ app.post("/auth/register", async (req, res) => {
   const userRole = validRoles.includes(role) ? role : "USER";
 
   const result = await pool.query(
-    'INSERT INTO "User" (id, username, email, password, role, "isVerified", "acceptedCGUAt", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) RETURNING *',
-    [id, name, email, hashedPassword, userRole, false, new Date()]
+    'INSERT INTO "User" (id, username, email, password, role, "isVerified", "acceptedCGUAt", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), NOW()) RETURNING *',
+    [id, name, email, hashedPassword, userRole, false]
   );
 
   const user = result.rows[0];
