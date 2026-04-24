@@ -13,6 +13,8 @@ export async function POST(req: Request) {
 
     const url = `${API_URL}/auth/reset-password/${token}`;
     console.log("Calling:", url);
+    console.log("Token reçu:", token);
+    console.log("URL appelée:", url);
 
     const res = await fetch(url, {
       method: "POST",
