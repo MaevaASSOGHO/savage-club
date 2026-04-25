@@ -1,8 +1,9 @@
+import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/payments/moneyfusion/create/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+
+
 import { moneyFusion } from "@/lib/payments/providers/moneyfusion";
 import { prisma } from "@/lib/prisma";
 

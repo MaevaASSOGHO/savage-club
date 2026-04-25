@@ -1,8 +1,9 @@
+import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/payments/stripe/create/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+
+
 import { stripe } from "@/lib/payments/providers/stripe";
 import { prisma } from "@/lib/prisma";
 

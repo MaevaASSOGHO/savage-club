@@ -1,8 +1,9 @@
+import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/notifications/route.ts
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
+
 import { NextResponse } from "next/server";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+
 
 // Correction du type : content peut être null
 type NotificationWithSender = {

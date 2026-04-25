@@ -1,8 +1,9 @@
+import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/posts/[id]/reactions/route.ts
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
+
 import { NextResponse } from "next/server";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+
 
 export async function GET(
   req: Request,

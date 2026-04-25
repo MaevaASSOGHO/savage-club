@@ -1,6 +1,7 @@
+import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/parametres/page.tsx
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+
+
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Sidebar from "@/components/Sidebar";

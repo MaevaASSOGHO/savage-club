@@ -1,7 +1,8 @@
+import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/creator-agreement/route.ts
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+
+
 import { NextResponse } from "next/server";
 
 // Version actuelle des règles — incrémenter si les règles changent

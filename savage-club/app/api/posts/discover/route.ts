@@ -1,3 +1,4 @@
+import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/posts/discover/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';

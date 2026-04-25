@@ -1,7 +1,8 @@
+import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/saved-posts/[postId]/route.ts
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+
+
 import { NextResponse, NextRequest } from "next/server";
 
 // GET - Vérifier si un post spécifique est sauvegardé

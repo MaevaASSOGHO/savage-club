@@ -1,6 +1,7 @@
+import { getServerSession, authOptions } from "@/lib/auth-compat";
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+
+
 import fs from "fs";
 import path from "path";
 import { NextRequest } from "next/server";

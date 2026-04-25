@@ -1,5 +1,6 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { getServerSession, authOptions } from "@/lib/auth-compat";
+
+
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 

@@ -1,7 +1,8 @@
+import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/conversations/[id]/messages/route.ts
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+
+
 import { NextResponse } from "next/server";
 import { encryptMessage, decryptMessage } from "@/lib/encryption";
 

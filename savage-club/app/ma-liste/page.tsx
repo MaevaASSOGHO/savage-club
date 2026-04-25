@@ -1,7 +1,8 @@
+import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/ma-liste/page.tsx
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+
+
 import { redirect } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import MaListeClient from "./MaListeClient";

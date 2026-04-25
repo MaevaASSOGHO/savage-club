@@ -1,19 +1,23 @@
 // middleware.ts
-import { withAuth } from "next-auth/middleware";
+import { auth } from "@/auth";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
-export default withAuth({
-  pages: { signIn: "/auth" },
+export default auth(function middleware(req: NextRequest & { auth: any }) {
+  const isLoggedIn = !!req.auth;
+  const isAuthPage = req.nextUrl.pathname.startsWith("/auth");
+  const isPublic   = req.nextUrl.pathname.startsWith("/cgu") ||
+                     req.nextUrl.pathname.startsWith("/api/auth");
+
+  if (!isLoggedIn && !isAuthPage && !isPublic) {
+    return NextResponse.redirect(new URL("/auth", req.url));
+  }
+
+  return NextResponse.next();
 });
 
 export const config = {
   matcher: [
-    "/",
-    "/messages/:path*",
-    "/parametres/:path*",
-    "/create/:path*",
-    "/ma-liste/:path*",
-    "/decouvrir/:path*",
-    "/formateurs/:path*",
-    "/appel/:path*",
+    "/((?!_next/static|_next/image|favicon.ico|api/auth).*)",
   ],
 };
