@@ -1,10 +1,21 @@
 // lib/auth-compat.ts
-// Shim de compatibilité next-auth v4 → v5
-// Permet d'utiliser getServerSession(authOptions) sans modifier tous les fichiers
 import { auth } from "@/auth";
 
 export const authOptions = {};
 
 export async function getServerSession(_options?: any) {
-  return await auth();
+  const session = await auth();
+  if (!session) return null;
+  
+  // Normaliser pour ressembler à la v4
+  return {
+    user: {
+      id:          (session.user as any)?.id,
+      email:       session.user?.email,
+      name:        session.user?.name,
+      image:       session.user?.image,
+      accessToken: (session.user as any)?.accessToken,
+    },
+    expires: session.expires,
+  };
 }
