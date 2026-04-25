@@ -544,14 +544,16 @@ export default function PostCard({ post }: { post: Post }) {
             {visibleComments.map((c) => (
               <div key={c.id} className="flex items-start gap-2">
                 <div className="w-6 h-6 rounded-full bg-white/20 overflow-hidden flex-shrink-0 mt-0.5">
-                  {c.user.avatar
+                  {c.user?.avatar
                     ? <img src={c.user.avatar} className="w-full h-full object-cover"/>
-                    : <div className="w-full h-full bg-purple-500 flex items-center justify-center text-[10px] text-white font-bold">{c.user.username[0].toUpperCase()}</div>
+                    : <div className="w-full h-full bg-purple-500 flex items-center justify-center text-[10px] text-white font-bold">
+                        {c.user?.username?.[0]?.toUpperCase() ?? "?"}
+                      </div>
                   }
                 </div>
                 <p className="text-xs leading-relaxed">
-                  <Link href={`/profil/${c.user.username}`} className="text-white font-semibold hover:text-amber-400 transition-colors mr-1.5">
-                    {c.user.username}
+                  <Link href={`/profil/${c.user?.username ?? ""}`} className="text-white font-semibold hover:text-amber-400 transition-colors mr-1.5">
+                    {c.user?.username ?? "Utilisateur"}
                   </Link>
                   <span className="text-white/70">{c.text}</span>
                 </p>
