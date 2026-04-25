@@ -1,8 +1,8 @@
 // auth.ts
 import Credentials from "next-auth/providers/credentials";
+import NextAuth from "next-auth";
 
 const API_URL = process.env.API_URL || "http://localhost:3001";
-const NextAuth = require("next-auth").default;
 
 const result = NextAuth({
   providers: [
