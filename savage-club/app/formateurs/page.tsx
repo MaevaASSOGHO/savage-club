@@ -24,14 +24,16 @@ export default async function FormateursPage() {
     orderBy: { createdAt: "desc" },
   });
 
-  const posts = postsFromDb.map((p) => ({
-    ...p,
-    content: p.content ?? "",
-    user:     p.User,
-    medias:   p.PostMedia,
-    likes:    p.Like,
-    comments: p.Comment,
-  }));
+  const posts = postsFromDb
+    .filter((p) => p.User !== null) // ← filtrer les posts sans user
+    .map((p) => ({
+      ...p,
+      content: p.content ?? "",
+      user:     p.User,
+      medias:   p.PostMedia,
+      likes:    p.Like,
+      comments: p.Comment,
+   }));
 
   return (
     <FeedLayout variant="solid">
