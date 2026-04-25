@@ -1,5 +1,7 @@
 // middleware.ts
-export { auth as default } from "@/auth";
+import { auth } from "@/auth";
+
+export default auth;
 
 export const config = {
   matcher: [
