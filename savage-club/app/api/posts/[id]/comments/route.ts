@@ -8,12 +8,20 @@ export async function GET(
 ) {
   const { id } = await params;
   const comments = await prisma.comment.findMany({
-    where: { postId: id, parentId: null }, // commentaires racine seulement
+    where: { postId: id, parentId: null },
     include: {
       User: { select: { username: true, avatar: true } },
     },
     orderBy: { createdAt: "asc" },
   });
 
-  return NextResponse.json(comments);
+  // Mapper PascalCase → camelCase
+  const formatted = comments.map((c) => ({
+    id:        c.id,
+    text:      c.text,
+    createdAt: c.createdAt,
+    user:      c.User ?? null,
+  }));
+
+  return NextResponse.json(formatted);
 }
