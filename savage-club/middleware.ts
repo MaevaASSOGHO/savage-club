@@ -8,7 +8,7 @@ export default auth((req: NextRequest & { auth?: any }) => {
   const isLoggedIn  = !!req.auth;
   const pathname    = req.nextUrl.pathname;
   
-  const isAuthPage  = pathname === "/auth" || pathname === "/register";
+  const isAuthPage  = pathname === "/auth" || pathname === "/register" || pathname.startsWith("/auth/");;
   const isPublic    = pathname.startsWith("/api") || 
                       pathname.startsWith("/_next") ||
                       pathname.startsWith("/cgu");
