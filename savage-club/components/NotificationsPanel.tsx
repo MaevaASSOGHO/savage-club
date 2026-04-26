@@ -5,6 +5,8 @@ import { useEffect, useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 
+const BETTIE_AVATAR = "https://res.cloudinary.com/du28udk49/image/upload/v1777169304/artwork_lq37po.png"; 
+
 type Notification = {
   id: string;
   type: string;
@@ -330,11 +332,13 @@ export default function NotificationsPanel({ onClose }: { onClose: () => void })
                   {/* Avatar + icône type */}
                   <div className="relative flex-shrink-0">
                     <div className="w-10 h-10 rounded-full overflow-hidden bg-purple-700">
-                      {notif.sender?.avatar ? (
+                      {notif.type === "IDENTITY_VERIFIED" || notif.type === "IDENTITY_REJECTED" ? (
+                        <img src="URL_PHOTO_BETTIE" alt="Bettie" className="w-full h-full object-cover"/>
+                      ) : notif.sender?.avatar ? (
                         <img src={notif.sender.avatar} alt="" className="w-full h-full object-cover"/>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-white text-sm font-bold">
-                          {notif.sender?.username?.[0]?.toUpperCase() ?? "?"}
+                          {notif.sender?.username?.[0]?.toUpperCase() ?? "👤"}
                         </div>
                       )}
                     </div>
@@ -353,7 +357,12 @@ export default function NotificationsPanel({ onClose }: { onClose: () => void })
                         </>
                       ) : (
                         <>
-                          <span className="font-semibold text-white">{notif.sender?.username ?? "Quelqu'un"}</span>
+                          <span className="font-semibold text-white">
+                            {notif.type === "IDENTITY_VERIFIED" || notif.type === "IDENTITY_REJECTED"
+                              ? "Bettie de Savage Club"
+                              : notif.sender?.username ?? "Utilisateur"
+                            }
+                          </span>
                           {" "}{TYPE_LABEL[notif.type] ?? "a interagi avec vous"}
                         </>
                       )}
