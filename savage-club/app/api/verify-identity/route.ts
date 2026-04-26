@@ -72,9 +72,23 @@ export async function POST(req: NextRequest) {
     // 🔥 UPLOAD (à adapter selon ton système)
     // ─────────────────────────────────────────────
     async function uploadFile(file: File): Promise<string> {
-      // 👉 TODO: remplacer par Cloudinary ou S3
-      // simulation temporaire
-      return `https://fake-upload.com/${Date.now()}-${file.name}`;
+      const cloudName    = process.env.CLOUDINARY_CLOUD_NAME;
+      const apiKey       = process.env.CLOUDINARY_API_KEY;
+      const apiSecret    = process.env.CLOUDINARY_API_SECRET;
+
+      const bytes  = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      const base64 = `data:${file.type};base64,${buffer.toString("base64")}`;
+
+      const { v2: cloudinary } = await import("cloudinary");
+      cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
+
+      const result = await cloudinary.uploader.upload(base64, {
+        folder:        "savage-club/verifications",
+        resource_type: "auto",
+      });
+
+      return result.secure_url;
     }
 
     const idDocumentUrl = await uploadFile(document);
