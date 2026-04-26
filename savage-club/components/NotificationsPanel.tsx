@@ -317,7 +317,7 @@ export default function NotificationsPanel({ onClose }: { onClose: () => void })
                         notif.type === "BOOKING_CANCELLED"
                       ? `/parametres?section=reservations`
                       : notif.type === "IDENTITY_VERIFIED" || notif.type === "IDENTITY_REJECTED"
-                      ? `/parametres?section=informations`
+                      ? `/parametres?section=verification`
                       : notif.post
                       ? `/post/${notif.post.id}`
                       : notif.sender

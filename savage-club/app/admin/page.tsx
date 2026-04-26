@@ -29,6 +29,7 @@ export default async function AdminPage() {
       role: true,
       avatar: true,
       idDocumentUrl: true,
+      selfieUrl: true,
       createdAt: true,
     },
     orderBy: { createdAt: "desc" },
