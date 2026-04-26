@@ -1,42 +1,78 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { splitPayment, settlePayment } from "@/lib/payments/paymentService";
+// app/api/webhooks/moneyfusion/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { prisma }                    from "@/lib/prisma";
+import type { MFWebhookPayload }     from "@/lib/payments/providers/moneyfusion";
 
-export async function POST(req: Request) {
-  const body = await req.json();
+export async function POST(req: NextRequest) {
+  try {
+    const payload: MFWebhookPayload = await req.json();
+    console.log("[MF Webhook]", payload.event, payload.tokenPay);
 
-  // MoneyFusion envoie le statut et les personal_Info
-  const { statut, token, personal_Info } = body;
+    // Ignorer les événements non finaux
+    if (payload.event === "payin.session.pending") {
+      return NextResponse.json({ received: true });
+    }
 
-  if (statut !== "paid") {
+    // Trouver le paiement par token (référence)
+    const payment = await prisma.payment.findFirst({
+      where: { reference: payload.tokenPay },
+    });
+
+    if (!payment) {
+      console.error("[MF Webhook] Paiement non trouvé pour token:", payload.tokenPay);
+      return NextResponse.json({ error: "Paiement non trouvé" }, { status: 404 });
+    }
+
+    // Éviter les doublons
+    if (payment.status === "SUCCESS" || payment.status === "FAILED") {
+      console.log("[MF Webhook] Paiement déjà traité:", payment.id);
+      return NextResponse.json({ received: true });
+    }
+
+    if (payload.event === "payin.session.completed") {
+      // Paiement réussi
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data:  { status: "SUCCESS" },
+      });
+
+      // Récupérer les infos depuis personal_Info
+      const info = payload.personal_Info?.[0];
+
+      // Actions selon le type de paiement
+      if (info?.type === "SUBSCRIPTION" && info?.userId) {
+        // Activer l'abonnement
+        await prisma.subscription.updateMany({
+          where:  { subscriberId: info.userId, status: "PENDING" },
+          data:   { status: "ACTIVE" },
+        });
+      }
+
+      // Notification au créateur
+      await prisma.notification.create({
+        data: {
+          id:         crypto.randomUUID(),
+          type:       "PAYMENT_RECEIVED",
+          receiverId: payment.recipientId,
+          senderId:   payment.payerId,
+          isRead:     false,
+        } as any,
+      });
+
+      console.log("[MF Webhook] Paiement confirmé:", payment.id);
+
+    } else if (payload.event === "payin.session.cancelled") {
+      // Paiement échoué
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data:  { status: "FAILED" },
+      });
+      console.log("[MF Webhook] Paiement annulé:", payment.id);
+    }
+
     return NextResponse.json({ received: true });
+  } catch (err) {
+    console.error("[MF Webhook] Erreur:", err);
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
-
-  const { paymentId, type } = personal_Info?.[0] ?? {};
-
-  if (!paymentId || !type) {
-    return NextResponse.json({ error: "Données manquantes" }, { status: 400 });
-  }
-
-  // Vérifier que ce paymentId n'a pas déjà été traité (idempotence)
-  const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
-
-  if (!payment || payment.status === "SUCCESS") {
-    return NextResponse.json({ received: true });
-  }
-
-  const { platformFee, creatorAmount } = splitPayment(payment.amount, type);
-
-  await prisma.payment.update({
-    where: { id: paymentId },
-    data: {
-      providerRef:   token,
-      platformFee,
-      creatorAmount,
-    },
-  });
-
-  await settlePayment(paymentId);
-
-  return NextResponse.json({ received: true });
 }

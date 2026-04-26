@@ -1,118 +1,93 @@
 // lib/payments/providers/moneyfusion.ts
+// Basé sur la doc officielle MoneyFusion
 
-import crypto from "crypto";
-import {
-  MoneyFusionConfig,
-  CreatePaymentRequest,
-  CreatePaymentResponse,
-  PaymentStatusResponse,
-  WithdrawRequest,
-  WithdrawResponse,
-} from "./moneyfusion.types";
+const API_URL     = process.env.MONEYFUSION_API_URL!; // depuis votre tableau de bord
+const APP_URL     = process.env.NEXTAUTH_URL || "https://savage-club.vercel.app";
+const WEBHOOK_URL = `${APP_URL}/api/webhooks/moneyfusion`;
 
-export class MoneyFusionClient {
-  private config: MoneyFusionConfig;
+export type MFPaymentResponse = {
+  statut:  boolean;
+  token:   string;
+  message: string;
+  url:     string;
+};
 
-  constructor() {
-    this.config = {
-      apiKey: process.env.MONEY_FUSION_API_KEY!,
-      secret: process.env.MONEY_FUSION_SECRET!,
-      merchantId: process.env.MONEY_FUSION_MERCHANT_ID!,
-      webhookSecret: process.env.MONEY_FUSION_WEBHOOK_SECRET!,
-      apiUrl: process.env.MONEY_FUSION_API_URL!,
-      environment: (process.env.MONEY_FUSION_ENVIRONMENT as "sandbox" | "production") || "sandbox",
-    };
-  }
+export type MFStatusResponse = {
+  statut: boolean;
+  data: {
+    _id:               string;
+    tokenPay:          string;
+    numeroSend:        string;
+    nomclient:         string;
+    personal_Info:     { paymentId: string; userId: string; type: string }[];
+    numeroTransaction: string;
+    Montant:           number;
+    frais:             number;
+    statut:            "pending" | "paid" | "failure" | "no paid";
+    moyen:             string;
+    return_url:        string;
+    createdAt:         string;
+  };
+  message: string;
+};
 
-  private generateSignature(payload: any): string {
-    const timestamp = Date.now().toString();
-    const stringToSign = `${timestamp}.${JSON.stringify(payload)}.${this.config.secret}`;
-    return crypto.createHash("sha256").update(stringToSign).digest("hex");
-  }
+export type MFWebhookPayload = {
+  event:             "payin.session.pending" | "payin.session.completed" | "payin.session.cancelled";
+  personal_Info:     { paymentId: string; userId: string; type: string }[];
+  tokenPay:          string;
+  numeroSend:        string;
+  nomclient:         string;
+  numeroTransaction: string;
+  Montant:           number;
+  frais:             number;
+  return_url:        string;
+  webhook_url:       string;
+  createdAt:         string;
+};
 
-  private async request<T>(
-    endpoint: string,
-    method: "GET" | "POST" = "POST",
-    body?: any
-  ): Promise<T> {
-    const url = `${this.config.apiUrl}${endpoint}`;
-    const timestamp = Date.now().toString();
-    const payload = body || {};
-    const signature = this.generateSignature(payload);
+/**
+ * Initier un paiement MoneyFusion
+ */
+export async function createMFPayment(params: {
+  amount:      number;
+  phoneNumber: string;
+  clientName:  string;
+  paymentId:   string;
+  userId:      string;
+  type:        string;
+  returnUrl?:  string;
+}): Promise<MFPaymentResponse> {
+  const body = {
+    totalPrice:   params.amount,
+    article:      [{ service: params.amount }],
+    numeroSend:   params.phoneNumber,
+    nomclient:    params.clientName,
+    personal_Info: [
+      {
+        paymentId: params.paymentId,
+        userId:    params.userId,
+        type:      params.type,
+      },
+    ],
+    return_url:   params.returnUrl ?? `${APP_URL}/payments/confirm`,
+    webhook_url:  WEBHOOK_URL,
+  };
 
-    const headers = {
-      "Content-Type": "application/json",
-      "X-API-Key": this.config.apiKey,
-      "X-Merchant-Id": this.config.merchantId,
-      "X-Timestamp": timestamp,
-      "X-Signature": signature,
-    };
+  const res = await fetch(API_URL, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify(body),
+  });
 
-    const response = await fetch(url, {
-      method,
-      headers,
-      body: method === "POST" ? JSON.stringify(payload) : undefined,
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.message || "Erreur MoneyFusion");
-    }
-
-    return data;
-  }
-
-  /**
-   * Créer un paiement
-   */
-  async createPayment(params: CreatePaymentRequest): Promise<CreatePaymentResponse> {
-    const payload = {
-      amount: params.amount,
-      currency: params.currency,
-      customer_name: params.customerName,
-      customer_email: params.customerEmail,
-      customer_phone: params.customerPhone,
-      description: params.description,
-      reference: params.reference || `PAY-${Date.now()}`,
-      return_url: params.returnUrl || `${process.env.NEXT_PUBLIC_APP_URL}/payments/confirm`,
-      webhook_url: params.webhookUrl || `${process.env.NEXT_PUBLIC_APP_URL}/api/payments/webhooks/moneyfusion`,
-    };
-
-    return this.request<CreatePaymentResponse>("/payments", "POST", payload);
-  }
-
-  /**
-   * Vérifier le statut d'un paiement
-   */
-  async checkPaymentStatus(reference: string): Promise<PaymentStatusResponse> {
-    return this.request<PaymentStatusResponse>(`/payments/${reference}`, "GET");
-  }
-
-  /**
-   * Effectuer un retrait vers Mobile Money
-   */
-  async withdraw(params: WithdrawRequest): Promise<WithdrawResponse> {
-    const payload = {
-      amount: params.amount,
-      currency: params.currency,
-      phone_number: params.phoneNumber,
-      account_name: params.accountName,
-      description: params.description || "Retrait Savage Club",
-      reference: `WITHDRAW-${Date.now()}`,
-    };
-
-    return this.request<WithdrawResponse>("/withdrawals", "POST", payload);
-  }
-
-  /**
-   * Vérifier la signature d'un webhook
-   */
-  verifyWebhookSignature(payload: any, signature: string, timestamp: string): boolean {
-    const stringToSign = `${timestamp}.${JSON.stringify(payload)}.${this.config.webhookSecret}`;
-    const expectedSignature = crypto.createHash("sha256").update(stringToSign).digest("hex");
-    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
-  }
+  const data = await res.json();
+  if (!data.statut) throw new Error(data.message || "Erreur MoneyFusion");
+  return data;
 }
 
-export const moneyFusion = new MoneyFusionClient();
+/**
+ * Vérifier le statut d'un paiement par token
+ */
+export async function checkMFPaymentStatus(token: string): Promise<MFStatusResponse> {
+  const res = await fetch(`https://www.pay.moneyfusion.net/paiementNotif/${token}`);
+  return res.json();
+}

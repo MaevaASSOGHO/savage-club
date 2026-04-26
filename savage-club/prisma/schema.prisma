@@ -517,6 +517,7 @@ enum Role {
 }
 
 enum SubscriptionStatus {
+  PENDING
   ACTIVE
   CANCELLED
   EXPIRED

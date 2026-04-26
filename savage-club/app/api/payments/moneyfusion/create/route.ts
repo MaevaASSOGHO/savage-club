@@ -1,11 +1,8 @@
-import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/payments/moneyfusion/create/route.ts
-
-import { NextRequest, NextResponse } from "next/server";
-
-
-import { moneyFusion } from "@/lib/payments/providers/moneyfusion";
-import { prisma } from "@/lib/prisma";
+import { getServerSession, authOptions } from "@/lib/auth-compat";
+import { NextRequest, NextResponse }      from "next/server";
+import { createMFPayment }                from "@/lib/payments/providers/moneyfusion";
+import { prisma }                         from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -13,48 +10,54 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Non connecté" }, { status: 401 });
   }
 
-  const { amount, type, recipientId, description } = await req.json();
+  const { amount, type, recipientId, description, phoneNumber } = await req.json();
 
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: { id: true, username: true, email: true },
-  });
-
-  if (!user) {
-    return NextResponse.json({ error: "Utilisateur non trouvé" }, { status: 404 });
+  if (!amount || !type || !recipientId || !phoneNumber) {
+    return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 });
   }
 
-  // Créer le paiement en base
+  const user = await prisma.user.findUnique({
+    where:  { email: session.user.email },
+    select: { id: true, username: true, displayName: true, email: true },
+  });
+  if (!user) return NextResponse.json({ error: "Utilisateur introuvable" }, { status: 404 });
+
+  // Créer le paiement en base avec statut PENDING
   const payment = await prisma.payment.create({
     data: {
-      id: crypto.randomUUID(),
-      payerId: user.id,
+      id:          crypto.randomUUID(),
+      payerId:     user.id,
       recipientId,
       amount,
-      platformFee: 0,
-      creatorAmount: amount,
-      status: "PENDING",
+      platformFee: Math.round(amount * 0.1), // 10% de commission
+      creatorAmount: Math.round(amount * 0.9),
+      status:      "PENDING",
       type,
-      provider: "MONEYFUSION",
-      reference: `SAVAGE-${type}-${Date.now()}`,
+      provider:    "MONEYFUSION",
+      description: description ?? null,
     },
   });
 
-  // Créer le paiement MoneyFusion
-  const result = await moneyFusion.createPayment({
+  // Initier le paiement MoneyFusion
+  const mfResponse = await createMFPayment({
     amount,
-    currency: "XOF",
-    customerName: user.username,
-    customerEmail: user.email,
-    customerPhone: "00000000",
-    description: description || `${type} - ${user.username}`,
-    reference: payment.reference!,
-    returnUrl: `${process.env.NEXT_PUBLIC_APP_URL}/payments/moneyfusion/confirm?paymentId=${payment.id}`,
+    phoneNumber,
+    clientName: user.displayName ?? user.username,
+    paymentId:  payment.id,
+    userId:     user.id,
+    type,
+  });
+
+  // Sauvegarder le token MoneyFusion comme référence
+  await prisma.payment.update({
+    where: { id: payment.id },
+    data:  { reference: mfResponse.token },
   });
 
   return NextResponse.json({
-    checkoutUrl: result.data.checkoutUrl,
-    paymentId: payment.id,
-    reference: result.data.reference,
+    paymentId:   payment.id,
+    token:       mfResponse.token,
+    redirectUrl: mfResponse.url,
+    message:     mfResponse.message,
   });
 }

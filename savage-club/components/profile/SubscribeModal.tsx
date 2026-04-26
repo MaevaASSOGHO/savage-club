@@ -113,79 +113,71 @@ export default function SubscribeModal({
     setLoading(true);
     setError(null);
 
-    // Abonnement gratuit — pas d'appel API paiement, juste créer la sub avec amount 0
-    const amount = selected === "FREE" ? 0
-      : selected === "VIP" ? (vipPrice ?? 0)
-      : (savagePrice ?? 0);
-
-    // Pour FREE on envoie tier "FREE" — sinon SAVAGE ou VIP
-    const res = await fetch("/api/subscriptions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        creatorId,
-        tier: selected,
-        amount,
-        reference: selected === "FREE" ? null : `SIM-${Date.now()}`,
-      }),
-    });
-
-    const data = await res.json();
-    setLoading(false);
-
-    if (!res.ok) {
-      setError(data.error || "Une erreur est survenue");
+    // Abonnement gratuit — pas de paiement
+    if (selected === "FREE") {
+      const res = await fetch("/api/subscriptions", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ creatorId, tier: "FREE", amount: 0 }),
+      });
+      const data = await res.json();
+      setLoading(false);
+      if (!res.ok) { setError(data.error || "Erreur"); return; }
+      onSuccess("FREE");
+      onClose();
       return;
     }
 
-    // SUCCESS
-    onSuccess(selected);
+    // Abonnement payant → MoneyFusion
+    const amount = selected === "VIP" ? (vipPrice ?? 0) : (savagePrice ?? 0);
+    
+    if (amount === 0) {
+      // Prix à 0 → gratuit aussi
+      const res = await fetch("/api/subscriptions", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ creatorId, tier: selected, amount: 0 }),
+      });
+      const data = await res.json();
+      setLoading(false);
+      if (!res.ok) { setError(data.error || "Erreur"); return; }
+      onSuccess(selected);
+      onClose();
+      return;
+    }
 
-    // ✅ update instantané (optimistic)
-    queryClient.setQueryData(["profile-stats", username], (old: any) => {
-      if (!old) return old;
+    // Demander le numéro de téléphone
+    const phone = prompt("Entrez votre numéro Mobile Money (ex: 0701020304) :");
+    if (!phone) { setLoading(false); return; }
 
-      return {
-        ...old,
-        followers:
-          selected === "FREE"
-            ? old.followers - 1 // unsubscribe
-            : old.followers + 1, // subscribe
-      };
+    // Créer d'abord l'abonnement en PENDING
+    const subRes = await fetch("/api/subscriptions", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ creatorId, tier: selected, amount, status: "PENDING" }),
     });
+    const subData = await subRes.json();
+    if (!subRes.ok) { setError(subData.error || "Erreur"); setLoading(false); return; }
 
-    // ✅ refetch clean derrière
-    queryClient.invalidateQueries({
-      queryKey: ["followers", username],
+    // Initier le paiement MoneyFusion
+    const payRes = await fetch("/api/payments/moneyfusion/create", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        amount,
+        type:        "SUBSCRIPTION",
+        recipientId: creatorId,
+        phoneNumber: phone,
+        description: `Abonnement ${selected} - ${displayName ?? username}`,
+      }),
     });
-    queryClient.invalidateQueries({ queryKey: ["following", username] });
+    const payData = await payRes.json();
+    setLoading(false);
 
-    // ✅ update instantané (optimistic)
-    queryClient.setQueryData(["following", username], (old: any) => {
-      if (!old) return old;
+    if (!payRes.ok) { setError(payData.error || "Erreur paiement"); return; }
 
-      return {
-        ...old,
-        followers:
-          selected === "FREE"
-            ? old.followers - 1 // unsubscribe
-            : old.followers + 1, // subscribe
-      };
-    });
-    queryClient.setQueryData(["followers", username], (old: any) => {
-      if (!old) return old;
-      return [...old, { id: "optimistic" }];
-    });
-
-    // ✅ refetch clean derrière
-    queryClient.invalidateQueries({
-      queryKey: ["followers", username],
-    });
-    queryClient.invalidateQueries({ queryKey: ["following", username] });
-
-    queryClient.invalidateQueries({ queryKey: ["followers", username] });
-    queryClient.invalidateQueries({ queryKey: ["following", username] });
-    onClose();
+    // Rediriger vers la page MoneyFusion
+    window.location.href = payData.redirectUrl;
   }
 
   async function handleUnsubscribe() {
@@ -314,11 +306,6 @@ queryClient.invalidateQueries({ queryKey: ["following", username] });
               </button>
             )}
 
-            {hasPaidOptions && (
-              <p className="text-white/20 text-[11px] text-center">
-                Simulation — intégration CinetPay à venir
-              </p>
-            )}
           </div>
         </div>
       </div>
