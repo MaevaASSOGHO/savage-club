@@ -85,9 +85,10 @@ app.post('/auth/forgot-password', async (req, res) => {
     const { email } = req.body;
     const userResult = await pool.query('SELECT * FROM "User" WHERE email = $1', [email]);
     const user = userResult.rows[0];
+    let token = null; // ← déclarer ici
 
     if (user) {
-      const token = crypto.randomBytes(32).toString('hex');
+      token = crypto.randomBytes(32).toString('hex'); // ← pas de const
       await pool.query(`
         ALTER TABLE "User"
         ADD COLUMN IF NOT EXISTS "resetPasswordToken" VARCHAR(255),
@@ -98,13 +99,11 @@ app.post('/auth/forgot-password', async (req, res) => {
         'UPDATE "User" SET "resetPasswordToken" = $1, "resetPasswordExpires" = $2 WHERE id = $3',
         [token, expiresAt, user.id]
       );
-      const resetLink = `${APP_URL}/auth/reset-password/${token}`;
-      console.log(`\n🔐 RESET LINK → ${resetLink}\n`);
     }
 
     return res.json({ 
       message: "Si un compte existe avec cet email, vous recevrez un lien de réinitialisation",
-      token: user ? token : null,
+      token,
     });
   } catch (error) {
     console.error("Erreur forgot-password:", error);

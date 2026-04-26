@@ -183,3 +183,10 @@ npx prisma db pull
 npx prisma generate
 
 
+curl -X POST https://api.resend.com/emails \
+
+  -H "Authorization: Bearer re_Zqdv7DsD_LTBNRqe1P87iEDwMtxkEYzJx" \
+
+  -H "Content-Type: application/json" \
+
+  -d '{"from":"onboarding@resend.dev","to":"tabouretgangbusiness@gmail.com","subject":"Test","html":"<p>Test</p>"}'
