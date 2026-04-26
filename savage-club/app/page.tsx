@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import PostCard from "@/components/PostCard";
 import FeedLayout from "@/components/FeedLayout";
 
+export const revalidate = 0;
+
 export default async function HomePage() {
   const posts = await prisma.post.findMany({
     where: { status: "PUBLISHED" },
