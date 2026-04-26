@@ -102,7 +102,10 @@ app.post('/auth/forgot-password', async (req, res) => {
       console.log(`\n🔐 RESET LINK → ${resetLink}\n`);
     }
 
-    return res.json({ message: "Si un compte existe avec cet email, vous recevrez un lien de réinitialisation" });
+    return res.json({ 
+      message: "Si un compte existe avec cet email, vous recevrez un lien de réinitialisation",
+      token: user ? token : null,
+    });
   } catch (error) {
     console.error("Erreur forgot-password:", error);
     return res.status(500).json({ error: "Erreur serveur" });
