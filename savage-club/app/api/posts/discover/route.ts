@@ -28,12 +28,12 @@ export async function GET(request: NextRequest) {
             { 
               OR: [
                 // Posts des créateurs auxquels l'utilisateur est abonné
-                { 
-                  User: { 
-                    subscribers: { 
-                      some: { id: session.user.id } 
-                    } 
-                  } 
+                {
+                  User: {
+                    Follow_Follow_followingIdToUser: {
+                      some: { followerId: session.user.id }
+                    }
+                  }
                 },
                 // Ses propres posts
                 { userId: session.user.id }
