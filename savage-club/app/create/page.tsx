@@ -56,12 +56,23 @@ export default function CreatePage() {
   async function uploadFile(file: File, index: number) {
     setMedias((prev) => prev.map((m, i) => i === index ? { ...m, uploading: true, error: null } : m));
     try {
+      const cloudName   = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+      const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+      const isVideo     = file.type.startsWith("video/");
+
       const formData = new FormData();
       formData.append("file", file);
-      const res  = await fetch("/api/upload", { method: "POST", body: formData });
+      formData.append("upload_preset", uploadPreset!);
+      formData.append("folder", "savage-club");
+
+      const res  = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/${isVideo ? "video" : "image"}/upload`,
+        { method: "POST", body: formData }
+      );
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Upload échoué");
-      setMedias((prev) => prev.map((m, i) => i === index ? { ...m, uploadedUrl: data.url, uploading: false } : m));
+
+      if (!res.ok) throw new Error(data.error?.message || "Upload échoué");
+      setMedias((prev) => prev.map((m, i) => i === index ? { ...m, uploadedUrl: data.secure_url, uploading: false } : m));
     } catch (err: any) {
       setMedias((prev) => prev.map((m, i) => i === index ? { ...m, error: err.message, uploading: false } : m));
     }
