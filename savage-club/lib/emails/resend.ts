@@ -151,3 +151,54 @@ export async function sendIdentityRejectedEmail(email: string, name: string, rea
     `,
   });
 }
+
+// ── Confirmation de paiement ───────────────────────────────────────────────
+export async function sendPaymentConfirmationEmail(
+  payerEmail: string,
+  payerName: string,
+  recipientName: string,
+  amount: number,
+  type: string
+) {
+  const typeLabels: Record<string, string> = {
+    MESSAGE:        "message privé",
+    AUDIO_CALL:     "appel audio",
+    VIDEO_CALL:     "appel vidéo",
+    CUSTOM_CONTENT: "contenu personnalisé",
+  };
+  const label = typeLabels[type] ?? "service";
+
+  await resend.emails.send({
+    from:    FROM,
+    to:      payerEmail,
+    subject: `Paiement confirmé — Savage Club`,
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#1E0A3C;color:#fff;border-radius:16px;">
+        <h1 style="color:#F59E0B;font-size:24px;margin-bottom:4px;">Savage Club</h1>
+        <p style="color:#A78BFA;font-size:13px;margin-bottom:28px;">Bettie confirme votre paiement ✓</p>
+
+        <p style="color:#fff;font-size:15px;line-height:1.6;margin-bottom:16px;">
+          Bonjour <strong>${payerName}</strong>,<br/>
+          Votre paiement pour un <strong style="color:#F59E0B;">${label}</strong> avec 
+          <strong>${recipientName}</strong> a été effectué avec succès.
+        </p>
+
+        <div style="background:#2A1356;border:1px solid #ffffff15;border-radius:12px;padding:20px;margin-bottom:24px;">
+          <p style="color:#F59E0B;font-weight:bold;font-size:18px;margin:0;">
+            ${amount.toLocaleString("fr-FR")} FCFA
+          </p>
+          <p style="color:#ffffff60;font-size:13px;margin:4px 0 0 0;">Paiement confirmé</p>
+        </div>
+
+        <a href="${APP_URL}/parametres?section=historique"
+          style="display:inline-block;background:#F59E0B;color:#000;font-weight:bold;padding:14px 28px;border-radius:12px;text-decoration:none;font-size:15px;">
+          Voir mon historique →
+        </a>
+
+        <p style="color:#ffffff30;font-size:11px;margin-top:28px;">
+          © Savage Club · savage-club.vercel.app
+        </p>
+      </div>
+    `,
+  });
+}

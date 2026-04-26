@@ -1,8 +1,7 @@
 import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/bookings/[id]/route.ts
 import { prisma } from "@/lib/prisma";
-
-
+import { sendBookingConfirmationEmail } from "@/lib/emails/resend";
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 
@@ -155,6 +154,44 @@ export async function PATCH(
     return null;
   });
 
+  // Envoyer email de confirmation si action = confirm ou accept_counter
+    if (result && (action === "confirm" || action === "accept_counter")) {
+      try {
+        // Récupérer les infos nécessaires
+        const [requester, creator] = await Promise.all([
+          prisma.user.findUnique({
+            where: { id: booking.requesterId },
+            select: { email: true, displayName: true, username: true },
+          }),
+          prisma.user.findUnique({
+            where: { id: booking.creatorId },
+            select: { displayName: true, username: true },
+          }),
+        ]);
+
+        if (requester?.email) {
+          const date = new Date(result.scheduledAt).toLocaleDateString("fr-FR", {
+            weekday: "long", day: "numeric", month: "long",
+            hour: "2-digit", minute: "2-digit",
+          });
+          const creatorName = creator?.displayName ?? creator?.username ?? "le créateur";
+          const recipientName = requester.displayName ?? requester.username ?? "vous";
+
+          await sendBookingConfirmationEmail(
+            requester.email,
+            recipientName,
+            creatorName,
+            date,
+            booking.type as "AUDIO_CALL" | "VIDEO_CALL"
+          ).catch((err) => console.error("Email booking error:", err));
+        }
+      } catch (err) {
+        console.error("Erreur email confirmation:", err);
+      }
+    }
+
+    if (!result) return NextResponse.json({ error: "Action invalide" }, { status: 400 });
+    return NextResponse.json(result);
   if (!result) return NextResponse.json({ error: "Action invalide" }, { status: 400 });
   return NextResponse.json(result);
 }

@@ -1,9 +1,8 @@
 import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/payments/route.ts
 import { prisma } from "@/lib/prisma";
-
-
 import { NextResponse } from "next/server";
+import { sendPaymentConfirmationEmail } from "@/lib/emails/resend";
 
 // ── GET /api/payments ─────────────────────────────────────────────────────
 // Retourne l'historique des paiements de l'utilisateur connecté
@@ -107,6 +106,31 @@ export async function POST(req: Request) {
       createdAt: true,
     },
   });
+
+  try {
+    const [payerUser, recipientUser] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: payer.id },
+        select: { email: true, displayName: true, username: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: recipientId },
+        select: { displayName: true, username: true },
+      }),
+    ]);
+
+    if (payerUser?.email && amount > 0) {
+      await sendPaymentConfirmationEmail(
+        payerUser.email,
+        payerUser.displayName ?? payerUser.username ?? "vous",
+        recipientUser?.displayName ?? recipientUser?.username ?? "le créateur",
+        amount,
+        type
+      ).catch((err) => console.error("Email paiement error:", err));
+    }
+  } catch (err) {
+    console.error("Erreur email paiement:", err);
+  }
 
   return NextResponse.json(payment, { status: 201 });
 }
