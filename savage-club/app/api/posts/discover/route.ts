@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
               OR: [
                 // Posts des créateurs auxquels l'utilisateur est abonné
                 { 
-                  user: { 
+                  User: { 
                     subscribers: { 
                       some: { id: session.user.id } 
                     } 
@@ -72,7 +72,6 @@ export async function GET(request: NextRequest) {
           },
         },
         orderBy: { createdAt: 'desc' },
-        distinct: ['id'],
         skip,
         take: limit,
       }),
