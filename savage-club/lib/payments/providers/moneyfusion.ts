@@ -79,7 +79,10 @@ export async function createMFPayment(params: {
     body:    JSON.stringify(body),
   });
 
-  const data = await res.json();
+  const text = await res.text(); // ← lire en texte d'abord
+  console.log("[MF] Réponse brute:", text);
+  
+  const data = JSON.parse(text); // ← puis parser
   if (!data.statut) throw new Error(data.message || "Erreur MoneyFusion");
   return data;
 }
