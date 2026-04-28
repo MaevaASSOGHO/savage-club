@@ -59,7 +59,7 @@ export async function createMFPayment(params: {
 }): Promise<MFPaymentResponse> {
   const body = {
     totalPrice:   params.amount,
-    article:      [{ service: params.amount }],
+    article:      [{ savage_club: params.amount }], // ← clé différente
     numeroSend:   params.phoneNumber,
     nomclient:    params.clientName,
     personal_Info: [
@@ -69,9 +69,10 @@ export async function createMFPayment(params: {
         type:      params.type,
       },
     ],
-    return_url:   params.returnUrl ?? `${APP_URL}/payments/confirm`,
+    return_url: `${APP_URL}/payments/confirm`,
   };
 
+  console.log("[MF] Payload envoyé:", JSON.stringify(body));
   const res = await fetch(API_URL, {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
