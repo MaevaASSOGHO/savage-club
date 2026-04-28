@@ -16,12 +16,14 @@ export async function POST(req: NextRequest) {
     if (!amount || !type || !recipientId || !phoneNumber) {
       return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 });
     }
+    console.log("[MF Create] Step 1 - body:", { amount, type, recipientId, phoneNumber });
 
     const user = await prisma.user.findUnique({
       where:  { email: session.user.email },
       select: { id: true, username: true, displayName: true, email: true },
     });
     if (!user) return NextResponse.json({ error: "Utilisateur introuvable" }, { status: 404 });
+    console.log("[MF Create] Step 2 - user:", user?.id);
 
     const payment = await prisma.payment.create({
       data: {
@@ -38,6 +40,8 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    console.log("[MF Create] Step 3 - payment créé:", payment.id);
+
     const mfResponse = await createMFPayment({
       amount,
       phoneNumber,
@@ -46,6 +50,8 @@ export async function POST(req: NextRequest) {
       userId:     user.id,
       type,
     });
+
+    console.log("[MF Create] Step 4 - MF response:", mfResponse.token);
 
     await prisma.payment.update({
       where: { id: payment.id },
@@ -60,7 +66,7 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (err: any) {
-    console.error("[MF Create] Erreur détaillée:", err.message, err.code, err.meta);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error("[MF Create] Erreur:", JSON.stringify(err, null, 2));
+    return NextResponse.json({ error: err.message ?? "Erreur inconnue" }, { status: 500 });
   }
 }
