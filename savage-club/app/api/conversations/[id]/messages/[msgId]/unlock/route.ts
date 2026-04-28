@@ -81,7 +81,7 @@ export async function POST(
           messageId:      msgId,
           conversationId,
         }],
-        return_url:  `${APP_URL}/payments/confirm`,
+        return_url: `${APP_URL}/payments/confirm?type=message`,
         webhook_url: `${APP_URL}/api/webhooks/moneyfusion`,
       }),
     });

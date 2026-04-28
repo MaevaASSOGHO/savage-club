@@ -191,7 +191,7 @@ export async function POST(req: Request) {
           type:      "BOOKING",
           bookingId: booking.id,
         }],
-        return_url:  `${APP_URL}/payments/confirm`,
+        return_url: `${APP_URL}/payments/confirm?type=booking`,
         webhook_url: `${APP_URL}/api/webhooks/moneyfusion`,
       }),
     });

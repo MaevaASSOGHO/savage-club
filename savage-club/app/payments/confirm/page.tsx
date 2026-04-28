@@ -12,6 +12,7 @@ function ConfirmInner() {
   const token        = searchParams.get("token");
 
   const [status, setStatus] = useState<"loading" | "success" | "failed" | "pending">("loading");
+  const type  = searchParams.get("type");
 
   useEffect(() => {
     if (!token) { setStatus("failed"); return; }
@@ -55,9 +56,15 @@ function ConfirmInner() {
               <p className="text-white font-bold text-xl">Paiement réussi !</p>
               <p className="text-white/40 text-sm mt-2">Votre paiement a été confirmé.</p>
             </div>
-            <button onClick={() => router.push("/")}
+            <button onClick={() => router.push(
+              type === "message" ? "/messages" :
+              type === "booking" ? "/parametres?section=reservations" :
+              "/"
+            )}
               className="w-full bg-amber-400 hover:bg-amber-300 text-black font-bold py-3 rounded-xl transition-all">
-              Retour à l'accueil
+              {type === "message" ? "Retour aux messages" :
+              type === "booking" ? "Voir mes réservations" :
+              "Retour à l'accueil"}
             </button>
           </>
         )}
