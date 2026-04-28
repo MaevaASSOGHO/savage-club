@@ -1,11 +1,9 @@
 import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/bookings/route.ts
-import { prisma } from "@/lib/prisma";
-
-
+import { prisma }       from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
-// GET /api/bookings — réservations de l'utilisateur connecté
+// ── GET ────────────────────────────────────────────────────────────────────
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
@@ -29,45 +27,40 @@ export async function GET(req: Request) {
     where,
     orderBy: { scheduledAt: "asc" },
     include: {
-      User_Booking_creatorIdToUser: { 
-        select: { id: true, username: true, displayName: true, avatar: true } 
-      },
-      User_Booking_requesterIdToUser: { 
-        select: { id: true, username: true, displayName: true, avatar: true } 
-      },
+      User_Booking_creatorIdToUser:   { select: { id: true, username: true, displayName: true, avatar: true } },
+      User_Booking_requesterIdToUser: { select: { id: true, username: true, displayName: true, avatar: true } },
     },
   });
 
-  // ✅ FORMATAGE : Transformer les noms techniques en noms propres
   const formattedBookings = bookings.map((booking) => ({
-    id: booking.id,
-    type: booking.type,
-    status: booking.status,
-    scheduledAt: booking.scheduledAt,
+    id:                booking.id,
+    type:              booking.type,
+    status:            booking.status,
+    scheduledAt:       booking.scheduledAt,
     counterProposedAt: booking.counterProposedAt,
-    counterRepliedAt: booking.counterRepliedAt,
-    negotiationCount: booking.negotiationCount,
-    duration: booking.duration,
-    amount: booking.amount,
-    note: booking.note,
+    counterRepliedAt:  booking.counterRepliedAt,
+    negotiationCount:  booking.negotiationCount,
+    duration:          booking.duration,
+    amount:            booking.amount,
+    note:              booking.note,
     requester: {
-      id: booking.User_Booking_requesterIdToUser.id,
-      username: booking.User_Booking_requesterIdToUser.username,
+      id:          booking.User_Booking_requesterIdToUser.id,
+      username:    booking.User_Booking_requesterIdToUser.username,
       displayName: booking.User_Booking_requesterIdToUser.displayName,
-      avatar: booking.User_Booking_requesterIdToUser.avatar,
+      avatar:      booking.User_Booking_requesterIdToUser.avatar,
     },
     creator: {
-      id: booking.User_Booking_creatorIdToUser.id,
-      username: booking.User_Booking_creatorIdToUser.username,
+      id:          booking.User_Booking_creatorIdToUser.id,
+      username:    booking.User_Booking_creatorIdToUser.username,
       displayName: booking.User_Booking_creatorIdToUser.displayName,
-      avatar: booking.User_Booking_creatorIdToUser.avatar,
+      avatar:      booking.User_Booking_creatorIdToUser.avatar,
     },
   }));
 
   return NextResponse.json(formattedBookings);
 }
 
-// POST /api/bookings — créer une réservation + simuler le paiement
+// ── POST ───────────────────────────────────────────────────────────────────
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
@@ -85,8 +78,8 @@ export async function POST(req: Request) {
   }
 
   const requester = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: { id: true },
+    where:  { email: session.user.email },
+    select: { id: true, username: true, displayName: true },
   });
   if (!requester) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
 
@@ -94,19 +87,55 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Impossible de vous réserver vous-même" }, { status: 400 });
   }
 
-  // Vérifier que le demandeur a bien un abonnement SAVAGE ou VIP
+  // Vérifier abonnement SAVAGE ou VIP
   const sub = await prisma.subscription.findFirst({
-    where: { subscriberId: requester.id, creatorId, status: "ACTIVE" },
+    where:  { subscriberId: requester.id, creatorId, status: "ACTIVE" },
     select: { tier: true },
   });
-
   if (!sub || sub.tier === "FREE") {
     return NextResponse.json({ error: "Abonnement Savage requis pour réserver un appel" }, { status: 403 });
   }
 
-  // Créer la réservation + paiement simulé dans une transaction
+  // Appel gratuit → créer directement sans paiement
+  if (amount === 0) {
+    const booking = await prisma.$transaction(async (tx) => {
+      const b = await tx.booking.create({
+        data: {
+          id:          crypto.randomUUID(),
+          type,
+          status:      "PENDING_CONFIRM",
+          scheduledAt: new Date(scheduledAt),
+          duration:    10,
+          amount:      0,
+          reference:   `BOOKING_${Date.now()}`,
+          note:        note ?? null,
+          updatedAt:   new Date(),
+          User_Booking_requesterIdToUser: { connect: { id: requester.id } },
+          User_Booking_creatorIdToUser:   { connect: { id: creatorId } },
+        },
+      });
+      await tx.notification.create({
+        data: {
+          id:         crypto.randomUUID(),
+          type:       "BOOKING",
+          receiverId: creatorId,
+          senderId:   requester.id,
+        },
+      });
+      return b;
+    });
+    return NextResponse.json({
+      booking:     { id: booking.id, type: booking.type, status: booking.status, scheduledAt: booking.scheduledAt, amount: 0 },
+      payment:     null,
+      redirectUrl: null,
+    }, { status: 201 });
+  }
+
+  // Appel payant → réservation PENDING + initier paiement MoneyFusion
+  const reference = `BOOKING_${Date.now()}`;
+
   const [booking, payment] = await prisma.$transaction(async (tx) => {
-    const booking = await tx.booking.create({
+    const b = await tx.booking.create({
       data: {
         id:          crypto.randomUUID(),
         type,
@@ -114,7 +143,7 @@ export async function POST(req: Request) {
         scheduledAt: new Date(scheduledAt),
         duration:    10,
         amount,
-        reference: `BOOKING_${Date.now()}`,
+        reference,
         note:        note ?? null,
         updatedAt:   new Date(),
         User_Booking_requesterIdToUser: { connect: { id: requester.id } },
@@ -122,53 +151,78 @@ export async function POST(req: Request) {
       },
     });
 
-    // Enregistrer le paiement
-    const paymentType = type === "VIDEO_CALL" ? "VIDEO_CALL" : "AUDIO_CALL";
-    const payment = await tx.payment.create({
+    const p = await tx.payment.create({
       data: {
-        id:          crypto.randomUUID(),
+        id:            crypto.randomUUID(),
         amount,
-        status: "SUCCESS",
-        type: paymentType,
-        description: `${type === "VIDEO_CALL" ? "Appel vidéo" : "Appel audio"} — ${new Date(scheduledAt).toLocaleDateString("fr-FR")}`,
-        reference: booking.reference,
-        User_Payment_payerIdToUser: { connect: { id: requester.id } },
+        status:        "PENDING",
+        type:          type === "VIDEO_CALL" ? "VIDEO_CALL" : "AUDIO_CALL",
+        provider:      "MONEYFUSION",
+        platformFee:   Math.round(amount * 0.1),
+        creatorAmount: Math.round(amount * 0.9),
+        description:   `${type === "VIDEO_CALL" ? "Appel vidéo" : "Appel audio"} — ${new Date(scheduledAt).toLocaleDateString("fr-FR")}`,
+        reference:     b.reference,
+        User_Payment_payerIdToUser:     { connect: { id: requester.id } },
         User_Payment_recipientIdToUser: { connect: { id: creatorId } },
       },
     });
 
-    // Créer une notification pour le créateur
-    await tx.notification.create({
-      data: {
-        id:          crypto.randomUUID(),
-        type: "BOOKING",
-        receiverId: creatorId,
-        senderId: requester.id,
-      },
-    });
-
-    return [booking, payment];
+    return [b, p];
   });
 
-  // ✅ FORMATAGE de la réponse POST (optionnel)
-  const formattedBooking = {
-    id: booking.id,
-    type: booking.type,
-    status: booking.status,
-    scheduledAt: booking.scheduledAt,
-    duration: booking.duration,
-    amount: booking.amount,
-    reference: booking.reference,
-    note: booking.note,
-  };
+  // Appeler MoneyFusion via Railway proxy
+  const PROXY_URL = `${process.env.API_URL}/payments/moneyfusion/create`;
+  const APP_URL   = process.env.NEXTAUTH_URL || "https://savage-club.vercel.app";
 
-  const formattedPayment = {
-    id: payment.id,
-    amount: payment.amount,
-    status: payment.status,
-    type: payment.type,
-    reference: payment.reference,
-  };
+  let redirectUrl: string | null = null;
 
-  return NextResponse.json({ booking: formattedBooking, payment: formattedPayment }, { status: 201 });
+  try {
+    const mfRes = await fetch(PROXY_URL, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        totalPrice:    amount,
+        article:       [{ savage_club: amount }],
+        numeroSend:    "0000000000",
+        nomclient:     requester.displayName || requester.username || "Utilisateur",
+        personal_Info: [{
+          paymentId: payment.id,
+          userId:    requester.id,
+          type:      "BOOKING",
+          bookingId: booking.id,
+        }],
+        return_url:  `${APP_URL}/payments/confirm`,
+        webhook_url: `${APP_URL}/api/webhooks/moneyfusion`,
+      }),
+    });
+
+    const mfData = await mfRes.json();
+
+    if (mfData.statut) {
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data:  { providerRef: mfData.token },
+      });
+      redirectUrl = mfData.url;
+    }
+  } catch (err) {
+    console.error("[Booking] Erreur MoneyFusion:", err);
+    // Ne pas bloquer — la réservation existe, le paiement sera relancé
+  }
+
+  return NextResponse.json({
+    booking: {
+      id:          booking.id,
+      type:        booking.type,
+      status:      booking.status,
+      scheduledAt: booking.scheduledAt,
+      amount:      booking.amount,
+    },
+    payment: {
+      id:     payment.id,
+      amount: payment.amount,
+      status: payment.status,
+    },
+    redirectUrl, // ← null si MF échoue, URL si OK
+  }, { status: 201 });
 }
