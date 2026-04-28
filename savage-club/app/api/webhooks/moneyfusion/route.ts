@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
 
     // Trouver le paiement par token (référence)
     const payment = await prisma.payment.findFirst({
-      where: { reference: payload.tokenPay },
+      where: { providerRef: payload.tokenPay },
     });
 
     if (!payment) {

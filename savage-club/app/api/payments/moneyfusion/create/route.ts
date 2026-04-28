@@ -25,16 +25,16 @@ export async function POST(req: NextRequest) {
   // Créer le paiement en base avec statut PENDING
   const payment = await prisma.payment.create({
     data: {
-      id:          crypto.randomUUID(),
-      payerId:     user.id,
+      id:            crypto.randomUUID(),
+      payerId:       user.id,
       recipientId,
       amount,
-      platformFee: Math.round(amount * 0.1), // 10% de commission
+      platformFee:   Math.round(amount * 0.1),
       creatorAmount: Math.round(amount * 0.9),
-      status:      "PENDING",
+      status:        "PENDING",
       type,
-      provider:    "MONEYFUSION",
-      description: description ?? null,
+      provider:      "MONEYFUSION",
+      description:   description ?? null,
     },
   });
 
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   // Sauvegarder le token MoneyFusion comme référence
   await prisma.payment.update({
     where: { id: payment.id },
-    data:  { reference: mfResponse.token },
+    data:  { providerRef: mfResponse.token },
   });
 
   return NextResponse.json({
