@@ -1,7 +1,8 @@
 // lib/payments/providers/moneyfusion.ts
 // Basé sur la doc officielle MoneyFusion
 
-const API_URL = `${process.env.API_URL}/payments/moneyfusion/create`;const APP_URL     = process.env.NEXTAUTH_URL || "https://savage-club.vercel.app";
+const API_URL     = process.env.MONEYFUSION_API_URL!; // depuis votre tableau de bord
+const APP_URL     = process.env.NEXTAUTH_URL || "https://savage-club.vercel.app";
 const WEBHOOK_URL = `${APP_URL}/api/webhooks/moneyfusion`;
 
 export type MFPaymentResponse = {
@@ -48,43 +49,38 @@ export type MFWebhookPayload = {
  * Initier un paiement MoneyFusion
  */
 export async function createMFPayment(params: {
-  amount:      number;
-  phoneNumber: string;
-  clientName:  string;
-  paymentId:   string;
-  userId:      string;
-  type:        string;
-  returnUrl?:  string;
+  amount:     number;
+  clientName: string;
+  paymentId:  string;
+  userId:     string;
+  type:       string;
+  tier?:      string;
+  returnUrl?: string;
 }): Promise<MFPaymentResponse> {
   const body = {
-    totalPrice:   params.amount,
-    article:      [{ savage_club: params.amount }], // ← clé différente
-    numeroSend:   params.phoneNumber,
-    nomclient:    params.clientName,
+    totalPrice:    params.amount,
+    article:       [{ savage_club: params.amount }],
+    numeroSend:    "0000000000", // MoneyFusion demande le numéro sur leur page
+    nomclient:     params.clientName,
     personal_Info: [
       {
         paymentId: params.paymentId,
         userId:    params.userId,
         type:      params.type,
+        tier:      params.tier ?? "",
       },
     ],
-    return_url: `${APP_URL}/payments/confirm`,
-    webhook_url: `${APP_URL}/api/webhooks/moneyfusion`,
+    return_url:  params.returnUrl ?? `${APP_URL}/payments/confirm`,
+    webhook_url: WEBHOOK_URL,
   };
 
-  console.log("[MF] Payload envoyé:", JSON.stringify(body));
-  console.log("[MF] params reçus:", JSON.stringify(params));
   const res = await fetch(API_URL, {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
     body:    JSON.stringify(body),
   });
 
-  const text = await res.text(); // ← lire en texte d'abord
-  console.log("[MF] Réponse brute:", text);
-  console.log("[MF] Réponse brute parsée:", JSON.parse(text));
-
-  const data = JSON.parse(text); // ← puis parser
+  const data = await res.json();
   if (!data.statut) throw new Error(data.message || "Erreur MoneyFusion");
   return data;
 }

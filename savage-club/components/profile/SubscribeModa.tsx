@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 type Tier = "FREE" | "SAVAGE" | "VIP";
 
@@ -95,6 +96,7 @@ export default function SubscribeModal({
   savagePrice, vipPrice,
   currentTier, onClose, onSuccess,
 }: Props) {
+  const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Tier | null>(
     currentTier !== "NONE" ? (currentTier as Tier) : null
   );
@@ -111,33 +113,66 @@ export default function SubscribeModal({
     setLoading(true);
     setError(null);
 
-    // Abonnement gratuit — pas d'appel API paiement, juste créer la sub avec amount 0
-    const amount = selected === "FREE" ? 0
-      : selected === "VIP" ? (vipPrice ?? 0)
-      : (savagePrice ?? 0);
-
-    // Pour FREE on envoie tier "FREE" — sinon SAVAGE ou VIP
-    const res = await fetch("/api/subscriptions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        creatorId,
-        tier: selected,
-        amount,
-        reference: selected === "FREE" ? null : `SIM-${Date.now()}`,
-      }),
-    });
-
-    const data = await res.json();
-    setLoading(false);
-
-    if (!res.ok) {
-      setError(data.error || "Une erreur est survenue");
+    // Abonnement gratuit — pas de paiement
+    if (selected === "FREE") {
+      const res = await fetch("/api/subscriptions", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ creatorId, tier: "FREE", amount: 0 }),
+      });
+      const data = await res.json();
+      setLoading(false);
+      if (!res.ok) { setError(data.error || "Erreur"); return; }
+      onSuccess("FREE");
+      onClose();
       return;
     }
 
-    onSuccess(selected);
-    onClose();
+    // Abonnement payant → MoneyFusion
+    const amount = selected === "VIP" ? (vipPrice ?? 0) : (savagePrice ?? 0);
+    
+    if (amount === 0) {
+      // Prix à 0 → gratuit aussi
+      const res = await fetch("/api/subscriptions", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ creatorId, tier: selected, amount: 0 }),
+      });
+      const data = await res.json();
+      setLoading(false);
+      if (!res.ok) { setError(data.error || "Erreur"); return; }
+      onSuccess(selected);
+      onClose();
+      return;
+    }
+
+    // Créer d'abord l'abonnement en PENDING
+    // const subRes = await fetch("/api/subscriptions", {
+    //   method:  "POST",
+    //   headers: { "Content-Type": "application/json" },
+    //   body:    JSON.stringify({ creatorId, tier: selected, amount, status: "PENDING" }),
+    // });
+    // const subData = await subRes.json();
+    // if (!subRes.ok) { setError(subData.error || "Erreur"); setLoading(false); return; }
+
+    // Initier le paiement MoneyFusion
+    const payRes = await fetch("/api/payments/moneyfusion/create", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        amount,
+        type:        "SUBSCRIPTION",
+        recipientId: creatorId,
+        description: `Abonnement ${selected} - ${displayName ?? username}`,
+      }),
+    });
+    const payData = await payRes.json();
+    setLoading(false);
+
+    if (!payRes.ok) { setError(payData.error || "Erreur paiement"); return; }
+
+    // Rediriger vers la page MoneyFusion
+    window.location.href = payData.redirectUrl;
   }
 
   async function handleUnsubscribe() {
@@ -145,6 +180,8 @@ export default function SubscribeModal({
     await fetch(`/api/subscriptions?creatorId=${creatorId}`, { method: "DELETE" });
     setLoading(false);
     onSuccess("FREE"); // retour à l'état non abonné
+    queryClient.invalidateQueries({ queryKey: ["followers", username] });
+queryClient.invalidateQueries({ queryKey: ["following", username] });
     onClose();
   }
 
@@ -249,9 +286,17 @@ export default function SubscribeModal({
             <button
               onClick={handleConfirm}
               disabled={!selected || loading || selected === currentTier}
-              className="w-full bg-amber-400 hover:bg-amber-300 disabled:opacity-30 disabled:cursor-not-allowed text-black font-bold py-3 rounded-xl transition-all"
+              className="w-full bg-amber-400 hover:bg-amber-300 disabled:opacity-30 disabled:cursor-not-allowed text-black font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
             >
-              {confirmLabel()}
+              {loading ? (
+                <>
+                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  Redirection vers le paiement...
+                </>
+              ) : confirmLabel()}
             </button>
 
             {isChanging && (
@@ -264,11 +309,6 @@ export default function SubscribeModal({
               </button>
             )}
 
-            {hasPaidOptions && (
-              <p className="text-white/20 text-[11px] text-center">
-                Simulation — intégration CinetPay à venir
-              </p>
-            )}
           </div>
         </div>
       </div>

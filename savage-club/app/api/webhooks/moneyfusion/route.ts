@@ -8,61 +8,71 @@ export async function POST(req: NextRequest) {
     const payload: MFWebhookPayload = await req.json();
     console.log("[MF Webhook]", payload.event, payload.tokenPay);
 
-    // Ignorer les événements non finaux
     if (payload.event === "payin.session.pending") {
       return NextResponse.json({ received: true });
     }
 
-    // Trouver le paiement par token (référence)
     const payment = await prisma.payment.findFirst({
       where: { providerRef: payload.tokenPay },
     });
 
     if (!payment) {
-      console.error("[MF Webhook] Paiement non trouvé pour token:", payload.tokenPay);
+      console.error("[MF Webhook] Paiement non trouvé:", payload.tokenPay);
       return NextResponse.json({ error: "Paiement non trouvé" }, { status: 404 });
     }
 
-    // Éviter les doublons
     if (payment.status === "SUCCESS" || payment.status === "FAILED") {
-      console.log("[MF Webhook] Paiement déjà traité:", payment.id);
       return NextResponse.json({ received: true });
     }
 
+    const info = payload.personal_Info?.[0] as any;
+
     if (payload.event === "payin.session.completed") {
-      // Paiement réussi
       await prisma.payment.update({
         where: { id: payment.id },
         data:  { status: "SUCCESS" },
       });
 
-      // Récupérer les infos depuis personal_Info
-      const info = payload.personal_Info?.[0];
-
-      // Actions selon le type de paiement
-      if (info?.type === "SUBSCRIPTION" && info?.userId) {
-        // Activer l'abonnement
-        await prisma.subscription.updateMany({
-          where:  { subscriberId: info.userId, status: "PENDING" },
-          data:   { status: "ACTIVE" },
+      // Créer l'abonnement ICI — seulement après confirmation paiement
+      if (info?.type === "SUBSCRIPTION" && info?.tier) {
+        const existing = await prisma.subscription.findFirst({
+          where: { subscriberId: payment.payerId, creatorId: payment.recipientId, status: "ACTIVE" },
         });
+
+        if (existing) {
+          await prisma.subscription.update({
+            where: { id: existing.id },
+            data:  { tier: info.tier, updatedAt: new Date() },
+          });
+        } else {
+          await prisma.subscription.create({
+            data: {
+              id:           crypto.randomUUID(),
+              subscriberId: payment.payerId,
+              creatorId:    payment.recipientId,
+              tier:         info.tier,
+              status:       "ACTIVE",
+              startedAt:    new Date(),
+              updatedAt:    new Date(), // ← champ requis
+            },
+          });
+        }
       }
 
       // Notification au créateur
       await prisma.notification.create({
         data: {
           id:         crypto.randomUUID(),
-          type:       "PAYMENT_RECEIVED",
+          type:       "FOLLOW",
           receiverId: payment.recipientId,
           senderId:   payment.payerId,
           isRead:     false,
         } as any,
       });
 
-      console.log("[MF Webhook] Paiement confirmé:", payment.id);
+      console.log("[MF Webhook] Paiement + abonnement confirmés:", payment.id);
 
     } else if (payload.event === "payin.session.cancelled") {
-      // Paiement échoué
       await prisma.payment.update({
         where: { id: payment.id },
         data:  { status: "FAILED" },
