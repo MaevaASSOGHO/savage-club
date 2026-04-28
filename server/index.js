@@ -166,16 +166,18 @@ app.get("/health", (req, res) => {
 // ─── PROXY POUR MONEYFUSION (éviter les CORS côté client) ─────────
 app.post("/payments/moneyfusion/create", async (req, res) => {
   try {
+    console.log("[MF Proxy] Payload reçu:", JSON.stringify(req.body));
     const response = await fetch("https://pay.moneyfusion.net/SAVAGE/a5bab0d5c72f21da/pay/", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify(req.body),
     });
     const data = await response.json();
+    console.log("[MF Proxy] Réponse:", JSON.stringify(data));
     return res.json(data);
   } catch (err) {
-    console.error("[MF Proxy] Erreur:", err);
-    return res.status(500).json({ error: "Erreur proxy MoneyFusion" });
+    console.error("[MF Proxy] Erreur détaillée:", err.message, err.code);
+    return res.status(500).json({ error: "Erreur proxy MoneyFusion", details: err.message });
   }
 });
 // ═════════════════════════════════════════════════════════════════
