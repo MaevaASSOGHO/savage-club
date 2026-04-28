@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     const mfResponse = await createMFPayment({
       amount,
       phoneNumber,
-      clientName: user.displayName ?? user.username,
+      clientName: user.displayName ?? user.username ?? "Utilisateur",
       paymentId:  payment.id,
       userId:     user.id,
       type,
