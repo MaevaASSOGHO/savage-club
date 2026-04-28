@@ -70,7 +70,6 @@ export async function createMFPayment(params: {
       },
     ],
     return_url:   params.returnUrl ?? `${APP_URL}/payments/confirm`,
-    webhook_url:  WEBHOOK_URL,
   };
 
   const res = await fetch(API_URL, {
