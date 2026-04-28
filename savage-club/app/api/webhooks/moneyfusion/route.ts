@@ -28,49 +28,91 @@ export async function POST(req: NextRequest) {
     const info = payload.personal_Info?.[0] as any;
 
     if (payload.event === "payin.session.completed") {
+      // 1. Confirmer le paiement
       await prisma.payment.update({
         where: { id: payment.id },
         data:  { status: "SUCCESS" },
       });
 
-      // Créer l'abonnement ICI — seulement après confirmation paiement
-      if (info?.type === "SUBSCRIPTION" && info?.tier) {
-        const existing = await prisma.subscription.findFirst({
-          where: { subscriberId: payment.payerId, creatorId: payment.recipientId, status: "ACTIVE" },
-        });
+      // 2. Actions selon le type
+      switch (info?.type) {
 
-        if (existing) {
-          await prisma.subscription.update({
-            where: { id: existing.id },
-            data:  { tier: info.tier, updatedAt: new Date() },
+        case "SUBSCRIPTION": {
+          if (!info?.tier) break;
+          const existing = await prisma.subscription.findFirst({
+            where: { subscriberId: payment.payerId, creatorId: payment.recipientId, status: "ACTIVE" },
           });
-        } else {
-          await prisma.subscription.create({
+          if (existing) {
+            await prisma.subscription.update({
+              where: { id: existing.id },
+              data:  { tier: info.tier, updatedAt: new Date() },
+            });
+          } else {
+            await prisma.subscription.create({
+              data: {
+                id:           crypto.randomUUID(),
+                subscriberId: payment.payerId,
+                creatorId:    payment.recipientId,
+                tier:         info.tier,
+                status:       "ACTIVE",
+                startedAt:    new Date(),
+                updatedAt:    new Date(),
+              },
+            });
+          }
+          // Notification au créateur
+          await prisma.notification.create({
             data: {
-              id:           crypto.randomUUID(),
-              subscriberId: payment.payerId,
-              creatorId:    payment.recipientId,
-              tier:         info.tier,
-              status:       "ACTIVE",
-              startedAt:    new Date(),
-              updatedAt:    new Date(), // ← champ requis
-            },
+              id:         crypto.randomUUID(),
+              type:       "FOLLOW",
+              receiverId: payment.recipientId,
+              senderId:   payment.payerId,
+              isRead:     false,
+            } as any,
           });
+          break;
+        }
+
+        case "BOOKING": {
+          if (!info?.bookingId) break;
+          const booking = await prisma.booking.findUnique({ where: { id: info.bookingId } });
+          if (booking) {
+            await prisma.notification.create({
+              data: {
+                id:         crypto.randomUUID(),
+                type:       "BOOKING",
+                receiverId: booking.creatorId,
+                senderId:   payment.payerId,
+                bookingId:  booking.id,
+                isRead:     false,
+              } as any,
+            });
+          }
+          break;
+        }
+
+        case "MESSAGE_UNLOCK": {
+          if (!info?.messageId) break;
+          // Débloquer le message
+          await prisma.message.update({
+            where: { id: info.messageId },
+            data:  { isUnlocked: true },
+          });
+          // Notification au créateur
+          await prisma.notification.create({
+            data: {
+              id:         crypto.randomUUID(),
+              type:       "PAYMENT_RECEIVED" as any,
+              receiverId: payment.recipientId,
+              senderId:   payment.payerId,
+              isRead:     false,
+            } as any,
+          });
+          break;
         }
       }
 
-      // Notification au créateur
-      await prisma.notification.create({
-        data: {
-          id:         crypto.randomUUID(),
-          type:       "FOLLOW",
-          receiverId: payment.recipientId,
-          senderId:   payment.payerId,
-          isRead:     false,
-        } as any,
-      });
-
-      console.log("[MF Webhook] Paiement + abonnement confirmés:", payment.id);
+      console.log("[MF Webhook] Paiement confirmé:", payment.id, info?.type);
 
     } else if (payload.event === "payin.session.cancelled") {
       await prisma.payment.update({

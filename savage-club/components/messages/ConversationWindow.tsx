@@ -126,9 +126,26 @@ export default function ConversationWindow({
   }
 
   async function handleUnlock(msgId: string) {
-    const res  = await fetch(`/api/conversations/${conversation.id}/messages/${msgId}/unlock`, { method: "POST" });
+    const res  = await fetch(
+      `/api/conversations/${conversation.id}/messages/${msgId}/unlock`,
+      { method: "POST" }
+    );
     const data = await res.json();
-    if (res.ok) setMessages((prev) => prev.map((m) => m.id === msgId ? { ...data } : m));
+
+    if (!res.ok) return;
+
+    // Paiement requis → rediriger vers MoneyFusion
+    if (data.requiresPayment) {
+      if (data.redirectUrl) {
+        window.location.href = data.redirectUrl;
+      } else {
+        alert("Le paiement n'a pas pu être initié. Réessayez plus tard.");
+      }
+      return;
+    }
+
+    // Gratuit ou déjà payé → afficher le contenu
+    setMessages((prev) => prev.map((m) => m.id === msgId ? { ...data } : m));
   }
 
   async function handleSetTTL(ttl: string) {

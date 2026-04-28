@@ -1,36 +1,31 @@
-import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/conversations/[id]/messages/[msgId]/unlock/route.ts
-import { prisma } from "@/lib/prisma";
+import { getServerSession, authOptions } from "@/lib/auth-compat";
+import { prisma }                        from "@/lib/prisma";
+import { NextResponse }                  from "next/server";
 
-
-import { NextResponse } from "next/server";
-import { decryptMessage } from "@/lib/encryption";
-
-// POST /api/conversations/[id]/messages/[msgId]/unlock
-// Débloquer un contenu payant après paiement simulé
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string; msgId: string }> }
 ) {
   const { id: conversationId, msgId } = await params;
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Non connecté" }, { status: 401 });
   }
 
   const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: { id: true },
+    where:  { email: session.user.email },
+    select: { id: true, username: true, displayName: true },
   });
   if (!user) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
 
   const message = await prisma.message.findUnique({
-    where: { id: msgId },
+    where:  { id: msgId },
     select: {
       id: true, content: true, mediaUrl: true, mediaType: true,
       iv: true, price: true, isUnlocked: true, senderId: true,
       conversationId: true,
-      User: { select: { id: true, username: true } },
     },
   });
 
@@ -44,30 +39,68 @@ export async function POST(
     return NextResponse.json({ error: "Déjà débloqué" }, { status: 400 });
   }
 
-  // Simuler le paiement + enregistrer
-  await prisma.$transaction(async (tx) => {
-    await tx.message.update({
-      where: { id: msgId },
-      data: { isUnlocked: true },
-    });
+  // Contenu gratuit → débloquer directement
+  if (!message.price || message.price === 0) {
+    await prisma.message.update({ where: { id: msgId }, data: { isUnlocked: true } });
+    return NextResponse.json({ ...message, isUnlocked: true, locked: false });
+  }
 
-    if (message.price && message.price > 0) {
-      await tx.payment.create({
-        data: {
-          id:          crypto.randomUUID(),
-          amount:      message.price,
-          status:      "SUCCESS",
-          type:        "MESSAGE",
-          description: `Contenu payant débloqué`,
-          reference:   `SIM-${Date.now()}`,
-          payerId:     user.id,
-          recipientId: message.senderId,
-        },
-      });
-    }
+  // Contenu payant → créer paiement PENDING + initier MoneyFusion
+  const payment = await prisma.payment.create({
+    data: {
+      id:            crypto.randomUUID(),
+      amount:        message.price,
+      status:        "PENDING",
+      type:          "MESSAGE",
+      provider:      "MONEYFUSION",
+      platformFee:   Math.round(message.price * 0.1),
+      creatorAmount: Math.round(message.price * 0.9),
+      description:   "Contenu payant",
+      payerId:       user.id,
+      recipientId:   message.senderId,
+    },
   });
 
-  // Retourner le message déchiffré
-  const dec = decryptMessage({ content: message.content, mediaUrl: message.mediaUrl, iv: message.iv });
-  return NextResponse.json({ ...message, ...dec, isUnlocked: true, locked: false });
+  const PROXY_URL = `${process.env.API_URL}/payments/moneyfusion/create`;
+  const APP_URL   = process.env.NEXTAUTH_URL || "https://savage-club.vercel.app";
+  let redirectUrl: string | null = null;
+
+  try {
+    const mfRes = await fetch(PROXY_URL, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        totalPrice:    message.price,
+        article:       [{ savage_club: message.price }],
+        numeroSend:    "0000000000",
+        nomclient:     user.displayName || user.username || "Utilisateur",
+        personal_Info: [{
+          paymentId:      payment.id,
+          userId:         user.id,
+          type:           "MESSAGE_UNLOCK",
+          messageId:      msgId,
+          conversationId,
+        }],
+        return_url:  `${APP_URL}/payments/confirm`,
+        webhook_url: `${APP_URL}/api/webhooks/moneyfusion`,
+      }),
+    });
+
+    const mfData = await mfRes.json();
+    if (mfData.statut) {
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data:  { providerRef: mfData.token },
+      });
+      redirectUrl = mfData.url;
+    }
+  } catch (err) {
+    console.error("[Unlock] Erreur MoneyFusion:", err);
+  }
+
+  return NextResponse.json({
+    requiresPayment: true,
+    redirectUrl,
+    amount:          message.price,
+  });
 }
