@@ -87,9 +87,14 @@ function CallPageInner() {
 
     if (!res.ok) return;
 
-    // Si paiement requis → rediriger vers MoneyFusion
-    if (data.redirectUrl) {
-      window.location.href = data.redirectUrl;
+    // Paiement requis → rediriger vers MoneyFusion
+    if (price > 0) {
+      if (data.redirectUrl) {
+        window.location.href = data.redirectUrl;
+      } else {
+        // MoneyFusion pas encore approuvé — ne pas confirmer
+        alert("Le paiement n'a pas pu être initié. Veuillez réessayer plus tard.");
+      }
       return;
     }
 
