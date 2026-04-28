@@ -1,8 +1,7 @@
 // lib/payments/providers/moneyfusion.ts
 // Basé sur la doc officielle MoneyFusion
 
-const API_URL     = process.env.MONEYFUSION_API_URL!; // depuis votre tableau de bord
-const APP_URL     = process.env.NEXTAUTH_URL || "https://savage-club.vercel.app";
+const API_URL = `${process.env.API_URL}/payments/moneyfusion/create`;const APP_URL     = process.env.NEXTAUTH_URL || "https://savage-club.vercel.app";
 const WEBHOOK_URL = `${APP_URL}/api/webhooks/moneyfusion`;
 
 export type MFPaymentResponse = {
