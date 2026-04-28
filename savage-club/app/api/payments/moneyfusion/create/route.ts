@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
     });
 
     console.log("[MF Create] Step 3 - payment créé:", payment.id);
+    console.log("[MF Create] clientName:", user.displayName, "|", user.username);
 
     const mfResponse = await createMFPayment({
       amount,

@@ -72,6 +72,7 @@ export async function createMFPayment(params: {
   };
 
   console.log("[MF] Payload envoyé:", JSON.stringify(body));
+  console.log("[MF] params reçus:", JSON.stringify(params));
   const res = await fetch(API_URL, {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
@@ -80,7 +81,8 @@ export async function createMFPayment(params: {
 
   const text = await res.text(); // ← lire en texte d'abord
   console.log("[MF] Réponse brute:", text);
-  
+  console.log("[MF] Réponse brute parsée:", JSON.parse(text));
+
   const data = JSON.parse(text); // ← puis parser
   if (!data.statut) throw new Error(data.message || "Erreur MoneyFusion");
   return data;
