@@ -69,6 +69,7 @@ export async function createMFPayment(params: {
       },
     ],
     return_url: `${APP_URL}/payments/confirm`,
+    webhook_url: `${APP_URL}/api/webhooks/moneyfusion`,
   };
 
   console.log("[MF] Payload envoyé:", JSON.stringify(body));
