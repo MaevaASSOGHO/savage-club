@@ -24,7 +24,6 @@ function formatPrice(price: number | null) {
   return `${price.toLocaleString("fr-FR")} FCFA / mois`;
 }
 
-// ── Option card ────────────────────────────────────────────────────────────
 function TierCard({
   tier, title, badge, price, perks, selected, current, unavailable, onClick,
 }: {
@@ -33,7 +32,6 @@ function TierCard({
   unavailable?: boolean; onClick: () => void;
 }) {
   const isHighlight = tier === "VIP";
-
   return (
     <button
       onClick={unavailable ? undefined : onClick}
@@ -64,7 +62,6 @@ function TierCard({
             </span>
           )}
         </div>
-
         <div className="flex items-center gap-2 flex-shrink-0 ml-2">
           <span className="text-white font-semibold text-sm">{price}</span>
           <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${
@@ -78,7 +75,6 @@ function TierCard({
           </div>
         </div>
       </div>
-
       <ul className="mt-2 space-y-1">
         {perks.map((perk) => (
           <li key={perk} className="text-white/40 text-xs flex items-center gap-1.5">
@@ -90,21 +86,18 @@ function TierCard({
   );
 }
 
-// ── Composant principal ────────────────────────────────────────────────────
 export default function SubscribeModal({
   username, displayName, avatar, creatorId,
   savagePrice, vipPrice,
   currentTier, onClose, onSuccess,
 }: Props) {
-  const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<Tier | null>(
-    currentTier !== "NONE" ? (currentTier as Tier) : null
-  );
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient  = useQueryClient();
+  const [selected,   setSelected]   = useState<Tier | null>(currentTier !== "NONE" ? (currentTier as Tier) : null);
+  const [loading,    setLoading]    = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
+  const [error,      setError]      = useState<string | null>(null);
 
-  const isChanging = currentTier !== "NONE";
-  const hasPaidOptions = savagePrice !== null || vipPrice !== null;
+  const isChanging     = currentTier !== "NONE";
 
   async function handleConfirm() {
     if (!selected) return;
@@ -113,27 +106,13 @@ export default function SubscribeModal({
     setLoading(true);
     setError(null);
 
-    // Abonnement gratuit — pas de paiement
-    if (selected === "FREE") {
-      const res = await fetch("/api/subscriptions", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ creatorId, tier: "FREE", amount: 0 }),
-      });
-      const data = await res.json();
-      setLoading(false);
-      if (!res.ok) { setError(data.error || "Erreur"); return; }
-      onSuccess("FREE");
-      onClose();
-      return;
-    }
+    const amount = selected === "FREE"  ? 0
+                 : selected === "VIP"   ? (vipPrice   ?? 0)
+                 : (savagePrice ?? 0);
 
-    // Abonnement payant → MoneyFusion
-    const amount = selected === "VIP" ? (vipPrice ?? 0) : (savagePrice ?? 0);
-    
-    if (amount === 0) {
-      // Prix à 0 → gratuit aussi
-      const res = await fetch("/api/subscriptions", {
+    // Abonnement gratuit ou prix = 0
+    if (selected === "FREE" || amount === 0) {
+      const res  = await fetch("/api/subscriptions", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ creatorId, tier: selected, amount: 0 }),
@@ -141,37 +120,34 @@ export default function SubscribeModal({
       const data = await res.json();
       setLoading(false);
       if (!res.ok) { setError(data.error || "Erreur"); return; }
-      onSuccess(selected);
+      onSuccess(selected as "FREE" | "SAVAGE" | "VIP");
+      queryClient.invalidateQueries({ queryKey: ["followers", username] });
       onClose();
       return;
     }
 
-    // Créer d'abord l'abonnement en PENDING
-    // const subRes = await fetch("/api/subscriptions", {
-    //   method:  "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body:    JSON.stringify({ creatorId, tier: selected, amount, status: "PENDING" }),
-    // });
-    // const subData = await subRes.json();
-    // if (!subRes.ok) { setError(subData.error || "Erreur"); setLoading(false); return; }
-
-    // Initier le paiement MoneyFusion
-    const payRes = await fetch("/api/payments/moneyfusion/create", {
+    // Abonnement payant → MoneyFusion (sans numéro, MF le demande sur leur page)
+    const payRes  = await fetch("/api/payments/moneyfusion/create", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({
         amount,
         type:        "SUBSCRIPTION",
+        tier:        selected,           // ← tier passé pour le webhook
         recipientId: creatorId,
         description: `Abonnement ${selected} - ${displayName ?? username}`,
       }),
     });
     const payData = await payRes.json();
-    setLoading(false);
 
-    if (!payRes.ok) { setError(payData.error || "Erreur paiement"); return; }
+    if (!payRes.ok) {
+      setLoading(false);
+      setError(payData.error || "Erreur paiement");
+      return;
+    }
 
-    // Rediriger vers la page MoneyFusion
+    // Redirection vers MoneyFusion
+    setRedirecting(true);
     window.location.href = payData.redirectUrl;
   }
 
@@ -179,14 +155,13 @@ export default function SubscribeModal({
     setLoading(true);
     await fetch(`/api/subscriptions?creatorId=${creatorId}`, { method: "DELETE" });
     setLoading(false);
-    onSuccess("FREE"); // retour à l'état non abonné
+    onSuccess("FREE");
     queryClient.invalidateQueries({ queryKey: ["followers", username] });
-queryClient.invalidateQueries({ queryKey: ["following", username] });
+    queryClient.invalidateQueries({ queryKey: ["following", username] });
     onClose();
   }
 
   const confirmLabel = () => {
-    if (loading) return "Traitement...";
     if (selected === currentTier) return "Abonnement actuel";
     if (!selected) return "Choisir un abonnement";
     if (selected === "FREE") return "S'abonner gratuitement";
@@ -195,10 +170,8 @@ queryClient.invalidateQueries({ queryKey: ["following", username] });
 
   return (
     <>
-      {/* Overlay */}
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50" onClick={onClose}/>
 
-      {/* Modale */}
       <div className="fixed inset-x-0 bottom-0 md:inset-0 md:flex md:items-center md:justify-center z-50 pointer-events-none">
         <div className="pointer-events-auto w-full md:max-w-md bg-[#1E0A3C] md:rounded-2xl rounded-t-2xl border border-white/10 shadow-2xl overflow-hidden">
 
@@ -235,60 +208,43 @@ queryClient.invalidateQueries({ queryKey: ["following", username] });
 
           {/* Options */}
           <div className="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
-
-            {/* Option FREE — toujours présente */}
             <TierCard
-              tier="FREE"
-              title="Gratuit"
-              price="Gratuit"
+              tier="FREE" title="Gratuit" price="Gratuit"
               perks={["Accès aux contenus publics", "Commenter et réagir aux posts"]}
-              selected={selected === "FREE"}
-              current={currentTier === "FREE"}
+              selected={selected === "FREE"} current={currentTier === "FREE"}
               onClick={() => setSelected("FREE")}
             />
-
-            {/* Option SAVAGE — seulement si prix défini */}
             {savagePrice !== null && (
               <TierCard
-                tier="SAVAGE"
-                title="Savage"
-                price={formatPrice(savagePrice)!}
+                tier="SAVAGE" title="Savage" price={formatPrice(savagePrice)!}
                 perks={["Contenus exclusifs abonnés", "Messages au tarif abonné"]}
-                selected={selected === "SAVAGE"}
-                current={currentTier === "SAVAGE"}
+                selected={selected === "SAVAGE"} current={currentTier === "SAVAGE"}
                 onClick={() => setSelected("SAVAGE")}
               />
             )}
-
-            {/* Option VIP — seulement si prix défini */}
             {vipPrice !== null && (
               <TierCard
-                tier="VIP"
-                title="Savage VIP"
-                badge="PREMIUM"
-                price={formatPrice(vipPrice)!}
-                perks={[
-                  "Tout l'abonnement Savage",
-                  "Messages gratuits",
-                  "Appels audio & vidéo au tarif créateur",
-                ]}
-                selected={selected === "VIP"}
-                current={currentTier === "VIP"}
+                tier="VIP" title="Savage VIP" badge="PREMIUM" price={formatPrice(vipPrice)!}
+                perks={["Tout l'abonnement Savage", "Messages gratuits", "Appels audio & vidéo au tarif créateur"]}
+                selected={selected === "VIP"} current={currentTier === "VIP"}
                 onClick={() => setSelected("VIP")}
               />
             )}
-
-            {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+                <p className="text-red-400 text-sm text-center">{error}</p>
+              </div>
+            )}
           </div>
 
           {/* Footer */}
           <div className="px-6 pb-6 pt-2 space-y-2 border-t border-white/8">
             <button
               onClick={handleConfirm}
-              disabled={!selected || loading || selected === currentTier}
+              disabled={!selected || loading || redirecting || selected === currentTier}
               className="w-full bg-amber-400 hover:bg-amber-300 disabled:opacity-30 disabled:cursor-not-allowed text-black font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
             >
-              {loading ? (
+              {redirecting ? (
                 <>
                   <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
@@ -296,19 +252,26 @@ queryClient.invalidateQueries({ queryKey: ["following", username] });
                   </svg>
                   Redirection vers le paiement...
                 </>
+              ) : loading ? (
+                <>
+                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  Traitement...
+                </>
               ) : confirmLabel()}
             </button>
 
             {isChanging && (
               <button
                 onClick={handleUnsubscribe}
-                disabled={loading}
-                className="w-full text-red-400/60 hover:text-red-400 text-sm py-2 transition-colors"
+                disabled={loading || redirecting}
+                className="w-full text-red-400/60 hover:text-red-400 text-sm py-2 transition-colors disabled:opacity-30"
               >
                 Se désabonner
               </button>
             )}
-
           </div>
         </div>
       </div>

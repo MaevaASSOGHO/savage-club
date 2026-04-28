@@ -4,6 +4,7 @@
 
 import { useSearchParams, useParams, useRouter } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
+import { generateSlots, groupSlotsByDay, formatSlot } from "@/lib/slots";
 
 type Creator = {
   id: string;
@@ -17,47 +18,9 @@ type Creator = {
 type Step = "slots" | "payment" | "confirmation";
 
 // Génère des créneaux sur les 7 prochains jours, toutes les heures de 9h à 20h
-function generateSlots(): Date[] {
-  const slots: Date[] = [];
-  const now = new Date();
 
-  // ⏳ +30 minutes
-  const start = new Date(now.getTime() + 30 * 60 * 1000);
-
-  // 🔁 Arrondi au prochain quart d’heure
-  start.setMinutes(Math.ceil(start.getMinutes() / 15) * 15);
-  start.setSeconds(0);
-  start.setMilliseconds(0);
-
-  // ⏱️ Fin = +5 heures
-  const end = new Date(start.getTime() + 5 * 60 * 60 * 1000);
-
-  let current = new Date(start);
-
-  while (current <= end) {
-    slots.push(new Date(current));
-    current.setMinutes(current.getMinutes() + 15);
-  }
-
-  return slots;
-}
-
-function formatSlot(date: Date) {
-  return date.toLocaleString("fr-FR", {
-    weekday: "short", day: "numeric", month: "short",
-    hour: "2-digit", minute: "2-digit",
-  });
-}
-
-function groupByDay(slots: Date[]): { label: string; slots: Date[] }[] {
-  const groups: Record<string, Date[]> = {};
-  for (const slot of slots) {
-    const key = slot.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(slot);
-  }
-  return Object.entries(groups).map(([label, slots]) => ({ label, slots }));
-}
+const slots = generateSlots();
+const groups = groupSlotsByDay(slots);
 
 function CallPageInner() {
   const params = useParams();
@@ -77,8 +40,8 @@ function CallPageInner() {
   const [bookingId, setBookingId] = useState<string | null>(null);
 
   const slots = generateSlots();
-  const grouped = groupByDay(slots);
-
+  const grouped = groupSlotsByDay(slots);
+  
   const isVideo = callType === "video";
   const typeLabel = isVideo ? "Appel vidéo" : "Appel audio";
   const bookingType = isVideo ? "VIDEO_CALL" : "AUDIO_CALL";
@@ -111,21 +74,33 @@ function CallPageInner() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        creatorId: creator.id,
-        type: bookingType,
+        creatorId:   creator.id,
+        type:        bookingType,
         scheduledAt: selectedSlot.toISOString(),
-        amount: price,
-        note: note || null,
+        amount:      price,
+        note:        note || null,
       }),
     });
 
     const data = await res.json();
     setPaying(false);
 
-    if (res.ok) {
-      setBookingId(data.booking.id);
-      setStep("confirmation");
+    if (!res.ok) return;
+
+    // Paiement requis → rediriger vers MoneyFusion
+    if (price > 0) {
+      if (data.redirectUrl) {
+        window.location.href = data.redirectUrl;
+      } else {
+        // MoneyFusion pas encore approuvé — ne pas confirmer
+        alert("Le paiement n'a pas pu être initié. Veuillez réessayer plus tard.");
+      }
+      return;
     }
+
+    // Gratuit → confirmation directe
+    setBookingId(data.booking.id);
+    setStep("confirmation");
   }
 
   if (loading) {
@@ -341,18 +316,20 @@ function CallPageInner() {
               />
             </div>
 
-            <div className="bg-amber-400/10 border border-amber-400/20 rounded-xl p-3">
-              <p className="text-amber-400/70 text-xs">
-                Simulation — intégration CinetPay à venir. Le paiement sera validé automatiquement.
-              </p>
-            </div>
-
             <button
               onClick={handlePay}
               disabled={paying}
               className="w-full bg-amber-400 hover:bg-amber-300 disabled:opacity-40 text-black font-bold py-3 rounded-xl transition-all"
             >
-              {paying ? "Traitement..." : price ? `Payer ${price.toLocaleString("fr-FR")} FCFA (simulation)` : "Confirmer (gratuit)"}
+              {paying ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  {price ? "Redirection vers le paiement..." : "Traitement..."}
+                </span>
+              ) : price ? `Payer ${price.toLocaleString("fr-FR")} FCFA` : "Confirmer (gratuit)"}
             </button>
           </div>
         )}

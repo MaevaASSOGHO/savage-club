@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import PaymentMethodSelector from "@/components/payments/PaymentMethodSelector"; // Ajouter l'import
 
 type Tier = "FREE" | "SAVAGE" | "VIP";
 
@@ -96,6 +97,7 @@ export default function SubscribeModal({
   const [loading,    setLoading]    = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [error,      setError]      = useState<string | null>(null);
+  const [showPaymentSelector, setShowPaymentSelector] = useState(false); // Ajouter le state
 
   const isChanging     = currentTier !== "NONE";
 
@@ -126,29 +128,9 @@ export default function SubscribeModal({
       return;
     }
 
-    // Abonnement payant → MoneyFusion (sans numéro, MF le demande sur leur page)
-    const payRes  = await fetch("/api/payments/moneyfusion/create", {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({
-        amount,
-        type:        "SUBSCRIPTION",
-        tier:        selected,           // ← tier passé pour le webhook
-        recipientId: creatorId,
-        description: `Abonnement ${selected} - ${displayName ?? username}`,
-      }),
-    });
-    const payData = await payRes.json();
-
-    if (!payRes.ok) {
-      setLoading(false);
-      setError(payData.error || "Erreur paiement");
-      return;
-    }
-
-    // Redirection vers MoneyFusion
-    setRedirecting(true);
-    window.location.href = payData.redirectUrl;
+    // Abonnement payant → ouvrir le sélecteur de méthode de paiement
+    setLoading(false);
+    setShowPaymentSelector(true);
   }
 
   async function handleUnsubscribe() {
@@ -166,6 +148,13 @@ export default function SubscribeModal({
     if (!selected) return "Choisir un abonnement";
     if (selected === "FREE") return "S'abonner gratuitement";
     return isChanging ? `Passer en ${selected}` : `S'abonner en ${selected}`;
+  };
+
+  const getAmount = () => {
+    if (!selected) return 0;
+    if (selected === "FREE") return 0;
+    if (selected === "VIP") return vipPrice ?? 0;
+    return savagePrice ?? 0;
   };
 
   return (
@@ -275,6 +264,26 @@ export default function SubscribeModal({
           </div>
         </div>
       </div>
+
+      {/* Payment Method Selector */}
+      {showPaymentSelector && selected && (
+        <PaymentMethodSelector
+          amount={getAmount()}
+          label={`Abonnement ${selected} — ${displayName ?? username}`}
+          onClose={() => setShowPaymentSelector(false)}
+          mfPayload={{
+            type:        "SUBSCRIPTION",
+            recipientId: creatorId,
+            tier:        selected,
+            route:       "subscription",
+          }}
+          stripePayload={{
+            type:        "SUBSCRIPTION",
+            recipientId: creatorId,
+            description: `Abonnement ${selected} — ${displayName ?? username}`,
+          }}
+        />
+      )}
     </>
   );
 }
