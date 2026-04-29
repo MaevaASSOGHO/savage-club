@@ -6,7 +6,6 @@ import Link from "next/link";
 import Avatar from "./Avatar";
 import MessageBubble from "./MessageBubble";
 import { formatDate, timeUntilExpiry, type Conversation, type Message } from "./types";
-import PaymentMethodSelector from "@/components/payments/PaymentMethodSelector"; // Ajouter l'import
 
 const TTL_OPTIONS = [
   { value: "1h",  label: "1 heure" },
@@ -34,9 +33,6 @@ export default function ConversationWindow({
   const [hasMore,        setHasMore]        = useState(false);
   const [cursor,         setCursor]         = useState<string | null>(null);
   const [showSettings,   setShowSettings]   = useState(false);
-  const [showPaymentSelector, setShowPaymentSelector] = useState(false); // Ajouter le state
-  const [pendingUnlockMsgId, setPendingUnlockMsgId] = useState<string | null>(null); // Ajouter le state
-  const [pendingUnlockPrice, setPendingUnlockPrice] = useState<number>(0); // Ajouter le state
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileRef   = useRef<HTMLInputElement>(null);
@@ -138,11 +134,13 @@ export default function ConversationWindow({
 
     if (!res.ok) return;
 
-    // Paiement requis → ouvrir le sélecteur de méthode de paiement
+    // Paiement requis → rediriger vers MoneyFusion
     if (data.requiresPayment) {
-      setPendingUnlockMsgId(msgId);
-      setPendingUnlockPrice(data.amount);
-      setShowPaymentSelector(true);
+      if (data.redirectUrl) {
+        window.location.href = data.redirectUrl;
+      } else {
+        alert("Le paiement n'a pas pu être initié. Réessayez plus tard.");
+      }
       return;
     }
 
@@ -345,34 +343,6 @@ export default function ConversationWindow({
             </button>
           </div>
         </div>
-      )}
-
-      {/* Payment Method Selector */}
-      {showPaymentSelector && pendingUnlockMsgId && (
-        <PaymentMethodSelector
-          amount={pendingUnlockPrice}
-          label="Déverrouiller ce contenu"
-          onClose={() => {
-            setShowPaymentSelector(false);
-            setPendingUnlockMsgId(null);
-            setPendingUnlockPrice(0);
-          }}
-          mfPayload={{
-            type:        "UNLOCK",
-            recipientId: conversation.other?.id ?? "", // Ajouter le destinataire
-            description: "Déverrouillage de contenu",
-            route:       "unlock", // Route requise
-            extra: {
-              conversationId: conversation.id,
-              messageId:      pendingUnlockMsgId,
-            },
-          }}
-          stripePayload={{
-            type:        "UNLOCK",
-            recipientId: conversation.other?.id ?? "",
-            description: "Déverrouillage de contenu",
-          }}
-        />
       )}
     </div>
   );

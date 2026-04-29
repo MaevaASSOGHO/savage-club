@@ -5,7 +5,6 @@
 import { useSearchParams, useParams, useRouter } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { generateSlots, groupSlotsByDay, formatSlot } from "@/lib/slots";
-import PaymentMethodSelector from "@/components/payments/PaymentMethodSelector"; // Ajouter l'import
 
 type Creator = {
   id: string;
@@ -39,7 +38,6 @@ function CallPageInner() {
   const [note, setNote] = useState("");
   const [paying, setPaying] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
-  const [showPaymentSelector, setShowPaymentSelector] = useState(false); // Ajouter le state
 
   const slots = generateSlots();
   const grouped = groupSlotsByDay(slots);
@@ -89,9 +87,14 @@ function CallPageInner() {
 
     if (!res.ok) return;
 
-    // Paiement requis → ouvrir le sélecteur de méthode de paiement
+    // Paiement requis → rediriger vers MoneyFusion
     if (price > 0) {
-      setShowPaymentSelector(true);
+      if (data.redirectUrl) {
+        window.location.href = data.redirectUrl;
+      } else {
+        // MoneyFusion pas encore approuvé — ne pas confirmer
+        alert("Le paiement n'a pas pu être initié. Veuillez réessayer plus tard.");
+      }
       return;
     }
 
@@ -324,38 +327,13 @@ function CallPageInner() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
                   </svg>
-                  {price ? "Préparation..." : "Traitement..."}
+                  {price ? "Redirection vers le paiement..." : "Traitement..."}
                 </span>
               ) : price ? `Payer ${price.toLocaleString("fr-FR")} FCFA` : "Confirmer (gratuit)"}
             </button>
           </div>
         )}
       </div>
-
-      {/* Payment Method Selector */}
-      {showPaymentSelector && price !== undefined && price !== null && price > 0 && selectedSlot && (
-        <PaymentMethodSelector
-          amount={price}
-          label={`${typeLabel} — ${creator.displayName ?? creator.username}`}
-          onClose={() => setShowPaymentSelector(false)}
-          mfPayload={{
-            type:        "CALL",
-            recipientId: creator.id,
-            description: `${typeLabel} avec ${creator.displayName ?? creator.username}`,
-            route:       "booking", // Route requise
-            extra: {
-              bookingId:   bookingId,
-              scheduledAt: selectedSlot.toISOString(),
-              note:        note || null,
-            },
-          }}
-          stripePayload={{
-            type:        "CALL",
-            recipientId: creator.id,
-            description: `${typeLabel} avec ${creator.displayName ?? creator.username} le ${selectedSlot.toLocaleDateString("fr-FR")}`,
-          }}
-        />
-      )}
     </div>
   );
 }
