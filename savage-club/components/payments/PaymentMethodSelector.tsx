@@ -22,7 +22,6 @@ type Props = {
     type:        string;
     recipientId: string;
     description?: string;
-    currency?:   string;
     tier?:       string;
     bookingData?: Record<string, any>;
     messageId?:      string;
@@ -67,6 +66,8 @@ const PROVIDERS = [
   },
 ];
 
+const FCFA_TO_EUR = 0.00152;
+
 export default function PaymentMethodSelector({
   amount, label, onClose, mfPayload, stripePayload,
 }: Props) {
@@ -75,16 +76,12 @@ export default function PaymentMethodSelector({
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState<string | null>(null);
 
+  const amountEur = (amount * FCFA_TO_EUR).toFixed(2);
+
   async function handlePay() {
     setLoading(true);
     setError(null);
-
-    if (selected === "moneyfusion") {
-      await handleMoneyFusion();
-    } else {
-      await handleStripe();
-    }
-
+    selected === "moneyfusion" ? await handleMoneyFusion() : await handleStripe();
     setLoading(false);
   }
 
@@ -106,7 +103,7 @@ export default function PaymentMethodSelector({
     if (data.redirectUrl) {
       window.location.href = data.redirectUrl;
     } else {
-      setError("Paiement Mobile Money non disponible. Réessayez plus tard.");
+      setError("Mobile Money non disponible. Réessayez plus tard.");
     }
   }
 
@@ -116,7 +113,6 @@ export default function PaymentMethodSelector({
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({
         amount,
-        currency:       stripePayload.currency ?? "xof",
         type:           stripePayload.type,
         recipientId:    stripePayload.recipientId,
         description:    stripePayload.description,
@@ -132,6 +128,7 @@ export default function PaymentMethodSelector({
     const params = new URLSearchParams({
       clientSecret: data.clientSecret,
       amount:       amount.toString(),
+      amountEur:    data.amountEur ?? amountEur,
       description:  stripePayload.description ?? "Paiement Savage Club",
     });
     router.push(`/payments/stripe?${params.toString()}`);
@@ -177,6 +174,13 @@ export default function PaymentMethodSelector({
                     </span>
                   </div>
                   <p className="text-white/40 text-xs mt-0.5">{p.subtitle}</p>
+                  {/* Afficher le montant selon le provider */}
+                  <p className={`text-xs font-semibold mt-1 ${p.dot}`}>
+                    {p.id === "moneyfusion"
+                      ? `${amount.toLocaleString("fr-FR")} FCFA`
+                      : `≈ ${amountEur} EUR`
+                    }
+                  </p>
                 </div>
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${
                   selected === p.id ? p.check : "border-white/20"
@@ -208,7 +212,10 @@ export default function PaymentMethodSelector({
                   </svg>
                   {selected === "moneyfusion" ? "Redirection..." : "Chargement..."}
                 </>
-              ) : `Payer ${amount.toLocaleString("fr-FR")} FCFA`}
+              ) : selected === "moneyfusion"
+                ? `Payer ${amount.toLocaleString("fr-FR")} FCFA`
+                : `Payer ≈ ${amountEur} EUR`
+              }
             </button>
           </div>
         </div>

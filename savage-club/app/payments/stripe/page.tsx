@@ -1,9 +1,9 @@
 // app/payments/stripe/page.tsx
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
-import { useSearchParams, useRouter }     from "next/navigation";
-import { loadStripe }                     from "@stripe/stripe-js";
+import { useState, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { loadStripe }                 from "@stripe/stripe-js";
 import {
   Elements,
   PaymentElement,
@@ -13,18 +13,15 @@ import {
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
-// ── Formulaire de paiement ─────────────────────────────────────────────────
-function CheckoutForm({ amount, onSuccess }: { amount: number; onSuccess: () => void }) {
+function CheckoutForm({ amountFcfa, amountEur }: { amountFcfa: number; amountEur: string }) {
   const stripe   = useStripe();
   const elements = useElements();
-  const router   = useRouter();
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!stripe || !elements) return;
-
     setLoading(true);
     setError(null);
 
@@ -39,11 +36,22 @@ function CheckoutForm({ amount, onSuccess }: { amount: number; onSuccess: () => 
       setError(stripeError.message ?? "Erreur de paiement");
       setLoading(false);
     }
-    // Si succès, Stripe redirige automatiquement vers return_url
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Récap montant */}
+      <div className="bg-white/5 border border-white/8 rounded-xl p-4 space-y-1">
+        <div className="flex justify-between text-sm">
+          <span className="text-white/50">Montant</span>
+          <span className="text-white font-bold">{amountFcfa.toLocaleString("fr-FR")} FCFA</span>
+        </div>
+        <div className="flex justify-between text-xs">
+          <span className="text-white/30">Équivalent</span>
+          <span className="text-white/40">≈ {amountEur} EUR</span>
+        </div>
+      </div>
+
       <PaymentElement options={{ layout: "tabs" }}/>
 
       {error && (
@@ -65,19 +73,19 @@ function CheckoutForm({ amount, onSuccess }: { amount: number; onSuccess: () => 
             </svg>
             Traitement...
           </>
-        ) : `Payer ${amount.toLocaleString("fr-FR")} FCFA`}
+        ) : `Payer ${amountFcfa.toLocaleString("fr-FR")} FCFA`}
       </button>
     </form>
   );
 }
 
-// ── Page principale ────────────────────────────────────────────────────────
 function StripePageInner() {
   const searchParams = useSearchParams();
   const router       = useRouter();
 
   const clientSecret = searchParams.get("clientSecret");
-  const amount       = parseInt(searchParams.get("amount") ?? "0");
+  const amountFcfa   = parseInt(searchParams.get("amount") ?? "0");
+  const amountEur    = searchParams.get("amountEur") ?? (amountFcfa * 0.00152).toFixed(2);
   const description  = searchParams.get("description") ?? "Paiement Savage Club";
 
   if (!clientSecret) {
@@ -93,15 +101,12 @@ function StripePageInner() {
       <div className="max-w-md w-full space-y-6">
 
         {/* Header */}
-        <div className="text-center">
+        <div className="text-center space-y-1">
           <h1 className="text-white font-black text-xl">Savage Club</h1>
-          <p className="text-white/40 text-sm mt-1">{description}</p>
-          <p className="text-amber-400 font-bold text-2xl mt-2">
-            {amount.toLocaleString("fr-FR")} FCFA
-          </p>
+          <p className="text-white/40 text-sm">{description}</p>
         </div>
 
-        {/* Formulaire Stripe */}
+        {/* Formulaire */}
         <div className="bg-[#1E0A3C] border border-white/10 rounded-2xl p-6">
           <Elements
             stripe={stripePromise}
@@ -113,17 +118,20 @@ function StripePageInner() {
                   colorPrimary:    "#F59E0B",
                   colorBackground: "#1E0A3C",
                   colorText:       "#ffffff",
+                  colorTextSecondary: "rgba(255,255,255,0.5)",
                   borderRadius:    "12px",
+                  fontFamily:      "system-ui, sans-serif",
                 },
               },
             }}
           >
-            <CheckoutForm amount={amount} onSuccess={() => router.push("/")}/>
+            <CheckoutForm amountFcfa={amountFcfa} amountEur={amountEur}/>
           </Elements>
         </div>
 
-        <button onClick={() => router.back()} className="w-full text-white/30 hover:text-white text-sm transition-colors">
-          ← Annuler
+        <button onClick={() => router.back()}
+          className="w-full text-white/30 hover:text-white text-sm transition-colors py-2">
+          ← Annuler et revenir
         </button>
       </div>
     </div>
