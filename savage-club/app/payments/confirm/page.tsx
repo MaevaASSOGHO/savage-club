@@ -53,7 +53,7 @@ function ConfirmInner() {
   function getButtonLabel(): string {
     if (type === "message") return "Retour aux messages";
     if (type === "booking") return "Voir mes réservations";
-    if (returnTo)           return "Retour au profil";
+    if (returnTo)           return "Retour ";
     return "Retour à l'accueil";
   }
 
