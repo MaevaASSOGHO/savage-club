@@ -112,12 +112,7 @@ export default function SectionWallet() {
     const res  = await fetch("/api/wallet/withdraw", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({
-        amount:       parseInt(amount),
-        phoneNumber:  phone,
-        withdrawMode: operator,
-        countryCode:  country,
-      }),
+      body: JSON.stringify({ amount: parseInt(amount) }),
     });
     const d = await res.json();
     setSubmitting(false);
@@ -209,45 +204,6 @@ export default function SectionWallet() {
                   className="text-white/30 hover:text-white text-sm transition-colors">Annuler</button>
               </div>
 
-              {/* Pays */}
-              <div className="space-y-1.5">
-                <label className="text-white/40 text-xs font-medium uppercase tracking-wider">Pays</label>
-                <select value={country} onChange={(e) => { setCountry(e.target.value); setOperator(""); }}
-                  className="w-full bg-[#1E0A3C] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-amber-400/50 transition-colors">
-                  <option value="ci">🇨🇮 Côte d'Ivoire</option>
-                  <option value="sn">🇸🇳 Sénégal</option>
-                  <option value="bf">🇧🇫 Burkina Faso</option>
-                  <option value="bj">🇧🇯 Bénin</option>
-                  <option value="tg">🇹🇬 Togo</option>
-                  <option value="ml">🇲🇱 Mali</option>
-                  <option value="cm">🇨🇲 Cameroun</option>
-                </select>
-              </div>
-
-              {/* Opérateur */}
-              <div className="space-y-1.5">
-                <label className="text-white/40 text-xs font-medium uppercase tracking-wider">Opérateur</label>
-                <select value={operator} onChange={(e) => setOperator(e.target.value)} required
-                  className="w-full bg-[#1E0A3C] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-amber-400/50 transition-colors">
-                  <option value="">Choisir un opérateur</option>
-                  {filteredOperators.map((op) => (
-                    <option key={op.value} value={op.value}>{op.label}</option>
-                  ))}
-                  {filteredOperators.length === 0 && (
-                    <option value={`mobile-${country}`}>Mobile Money {country.toUpperCase()}</option>
-                  )}
-                </select>
-              </div>
-
-              {/* Numéro */}
-              <div className="space-y-1.5">
-                <label className="text-white/40 text-xs font-medium uppercase tracking-wider">Numéro</label>
-                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
-                  placeholder="07 00 00 00 00" required
-                  className="w-full bg-[#1E0A3C] border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/25 outline-none focus:border-amber-400/50 transition-colors"/>
-              </div>
-
-              {/* Montant */}
               <div className="space-y-1.5">
                 <label className="text-white/40 text-xs font-medium uppercase tracking-wider">
                   Montant (min. 5 000 pts)
@@ -270,7 +226,7 @@ export default function SectionWallet() {
                   </div>
                   <div className="h-px bg-white/8"/>
                   <div className="flex justify-between font-bold">
-                    <span className="text-white">Vous recevez</span>
+                    <span className="text-white">Vous recevrez</span>
                     <span className="text-amber-400">{net.toLocaleString("fr-FR")} FCFA</span>
                   </div>
                   {isManual && (
@@ -289,7 +245,7 @@ export default function SectionWallet() {
                 </div>
               )}
 
-              <button type="submit" disabled={submitting || amountNum < 5000 || !phone.trim() || !operator}
+              <button type="submit" disabled={submitting || amountNum < 5000}
                 className="w-full bg-amber-400 hover:bg-amber-300 disabled:opacity-30 text-black font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
                 {submitting ? (
                   <>
@@ -303,7 +259,7 @@ export default function SectionWallet() {
               </button>
 
               <p className="text-white/20 text-xs text-center">
-                {isManual ? "Validation admin sous 24-48h" : "Traitement automatique immédiat"}
+                {isManual ? "Validation admin sous 24-48h" : "MoneyFusion vous contactera pour finaliser le retrait"}
               </p>
             </form>
           )}

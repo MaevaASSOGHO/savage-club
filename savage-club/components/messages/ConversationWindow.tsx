@@ -71,7 +71,11 @@ export default function ConversationWindow({
   useEffect(() => {
     function handleVisibilityChange() {
       if (document.visibilityState === "visible") {
+        // Recharger immédiatement
         fetchMessages();
+        // Et encore après 2s et 5s pour laisser le webhook s'exécuter
+        setTimeout(fetchMessages, 2000);
+        setTimeout(fetchMessages, 5000);
       }
     }
     document.addEventListener("visibilitychange", handleVisibilityChange);
