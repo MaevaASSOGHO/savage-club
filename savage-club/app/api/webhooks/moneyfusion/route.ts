@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma }                    from "@/lib/prisma";
 import type { MFWebhookPayload }     from "@/lib/payments/providers/moneyfusion";
+import { settlePayment } from "@/lib/payments/paymentService";
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,6 +34,8 @@ export async function POST(req: NextRequest) {
         where: { id: payment.id },
         data:  { status: "SUCCESS" },
       });
+
+      await settlePayment(payment.id);
 
       // 2. Actions selon le type
       switch (info?.type) {

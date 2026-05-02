@@ -157,7 +157,7 @@ export default function PaymentMethodSelector({
             <div>
               <p className="text-white font-bold">Méthode de paiement</p>
               <p className="text-white/40 text-sm mt-0.5">
-                {label ?? `${amount.toLocaleString("fr-FR")} FCFA`}
+                {label ?? `${Math.round(amount * 1.03).toLocaleString("fr-FR")} FCFA débités (frais 3% inclus)`}
               </p>
             </div>
             <button onClick={onClose} className="text-white/30 hover:text-white transition-colors">
@@ -184,7 +184,7 @@ export default function PaymentMethodSelector({
                   <p className="text-white/40 text-xs mt-0.5">{p.subtitle}</p>
                   <p className={`text-xs font-semibold mt-1 ${p.dot}`}>
                     {p.id === "moneyfusion"
-                      ? `${amount.toLocaleString("fr-FR")} FCFA`
+                      ? `${Math.round(amount * 1.03).toLocaleString("fr-FR")} FCFA débités (frais 3% inclus)`
                       : `≈ ${amountEur} EUR`
                     }
                   </p>
