@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import PaymentMethodSelector from "@/components/payments/PaymentMethodSelector";
 
 type Tier = "FREE" | "SAVAGE" | "VIP";
 
@@ -91,13 +92,17 @@ export default function SubscribeModal({
   savagePrice, vipPrice,
   currentTier, onClose, onSuccess,
 }: Props) {
-  const queryClient  = useQueryClient();
-  const [selected,   setSelected]   = useState<Tier | null>(currentTier !== "NONE" ? (currentTier as Tier) : null);
-  const [loading,    setLoading]    = useState(false);
-  const [redirecting, setRedirecting] = useState(false);
-  const [error,      setError]      = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const [selected,  setSelected]  = useState<Tier | null>(currentTier !== "NONE" ? (currentTier as Tier) : null);
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState<string | null>(null);
+  const [showPayment, setShowPayment] = useState(false);
 
-  const isChanging     = currentTier !== "NONE";
+  const isChanging = currentTier !== "NONE";
+
+  const amount = selected === "FREE" ? 0
+               : selected === "VIP"  ? (vipPrice   ?? 0)
+               : (savagePrice ?? 0);
 
   async function handleConfirm() {
     if (!selected) return;
@@ -105,10 +110,6 @@ export default function SubscribeModal({
 
     setLoading(true);
     setError(null);
-
-    const amount = selected === "FREE"  ? 0
-                 : selected === "VIP"   ? (vipPrice   ?? 0)
-                 : (savagePrice ?? 0);
 
     // Abonnement gratuit ou prix = 0
     if (selected === "FREE" || amount === 0) {
@@ -126,29 +127,9 @@ export default function SubscribeModal({
       return;
     }
 
-    // Abonnement payant → MoneyFusion (sans numéro, MF le demande sur leur page)
-    const payRes  = await fetch("/api/payments/moneyfusion/create", {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({
-        amount,
-        type:        "SUBSCRIPTION",
-        tier:        selected,           // ← tier passé pour le webhook
-        recipientId: creatorId,
-        description: `Abonnement ${selected} - ${displayName ?? username}`,
-      }),
-    });
-    const payData = await payRes.json();
-
-    if (!payRes.ok) {
-      setLoading(false);
-      setError(payData.error || "Erreur paiement");
-      return;
-    }
-
-    // Redirection vers MoneyFusion
-    setRedirecting(true);
-    window.location.href = payData.redirectUrl;
+    // Abonnement payant → ouvrir le sélecteur de paiement
+    setLoading(false);
+    setShowPayment(true);
   }
 
   async function handleUnsubscribe() {
@@ -175,12 +156,10 @@ export default function SubscribeModal({
       <div className="fixed inset-x-0 bottom-0 md:inset-0 md:flex md:items-center md:justify-center z-50 pointer-events-none">
         <div className="pointer-events-auto w-full md:max-w-md bg-[#1E0A3C] md:rounded-2xl rounded-t-2xl border border-white/10 shadow-2xl overflow-hidden">
 
-          {/* Handle mobile */}
           <div className="flex justify-center pt-3 pb-1 md:hidden">
             <div className="w-10 h-1 bg-white/20 rounded-full"/>
           </div>
 
-          {/* Header */}
           <div className="px-6 pt-4 pb-5 border-b border-white/8">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-full overflow-hidden ring-2 ring-white/10 flex-shrink-0">
@@ -206,7 +185,6 @@ export default function SubscribeModal({
             </p>
           </div>
 
-          {/* Options */}
           <div className="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
             <TierCard
               tier="FREE" title="Gratuit" price="Gratuit"
@@ -237,22 +215,13 @@ export default function SubscribeModal({
             )}
           </div>
 
-          {/* Footer */}
           <div className="px-6 pb-6 pt-2 space-y-2 border-t border-white/8">
             <button
               onClick={handleConfirm}
-              disabled={!selected || loading || redirecting || selected === currentTier}
+              disabled={!selected || loading || selected === currentTier}
               className="w-full bg-amber-400 hover:bg-amber-300 disabled:opacity-30 disabled:cursor-not-allowed text-black font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
             >
-              {redirecting ? (
-                <>
-                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                  </svg>
-                  Redirection vers le paiement...
-                </>
-              ) : loading ? (
+              {loading ? (
                 <>
                   <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
@@ -266,7 +235,7 @@ export default function SubscribeModal({
             {isChanging && (
               <button
                 onClick={handleUnsubscribe}
-                disabled={loading || redirecting}
+                disabled={loading}
                 className="w-full text-red-400/60 hover:text-red-400 text-sm py-2 transition-colors disabled:opacity-30"
               >
                 Se désabonner
@@ -275,6 +244,26 @@ export default function SubscribeModal({
           </div>
         </div>
       </div>
+
+      {/* Sélecteur de méthode de paiement */}
+      {showPayment && selected && amount > 0 && (
+        <PaymentMethodSelector
+          amount={amount}
+          label={`Abonnement ${selected} — ${displayName ?? username}`}
+          onClose={() => setShowPayment(false)}
+          mfPayload={{
+            type:        "SUBSCRIPTION",
+            recipientId: creatorId,
+            tier:        selected,
+            route:       "subscription",
+          }}
+          stripePayload={{
+            type:        "SUBSCRIPTION",
+            recipientId: creatorId,
+            description: `Abonnement ${selected} — ${displayName ?? username}`,
+          }}
+        />
+      )}
     </>
   );
 }

@@ -10,7 +10,6 @@ type Props = {
   amount: number;
   label?: string;
   onClose: () => void;
-  onSuccess?: () => void; // Ajout : callback en cas de succès
   mfPayload: {
     type:        string;
     recipientId: string;
@@ -24,6 +23,10 @@ type Props = {
     recipientId: string;
     description?: string;
     currency?:   string;
+    tier?:       string;
+    bookingData?: Record<string, any>;
+    messageId?:      string;
+    conversationId?: string;
   };
 };
 
@@ -39,9 +42,11 @@ const PROVIDERS = [
       </svg>
     ),
     badge:    "Afrique",
-    color:    "text-amber-400",
-    bg:       "bg-amber-400/10 border-amber-400/30",
     bgActive: "bg-amber-400/15 border-amber-400/60",
+    bgIdle:   "bg-amber-400/5 border-amber-400/20 opacity-70 hover:opacity-90",
+    check:    "border-amber-400 bg-amber-400",
+    dot:      "text-amber-400",
+    badgeCls: "bg-amber-400/20 text-amber-400",
   },
   {
     id:       "stripe" as PaymentProvider,
@@ -54,52 +59,37 @@ const PROVIDERS = [
       </svg>
     ),
     badge:    "International",
-    color:    "text-blue-400",
-    bg:       "bg-blue-400/10 border-blue-400/30",
     bgActive: "bg-blue-400/15 border-blue-400/60",
+    bgIdle:   "bg-blue-400/5 border-blue-400/20 opacity-70 hover:opacity-90",
+    check:    "border-blue-400 bg-blue-400",
+    dot:      "text-blue-400",
+    badgeCls: "bg-blue-400/20 text-blue-400",
   },
 ];
 
 export default function PaymentMethodSelector({
-  amount, label, onClose, onSuccess, mfPayload, stripePayload,
+  amount, label, onClose, mfPayload, stripePayload,
 }: Props) {
-  const router  = useRouter();
+  const router   = useRouter();
   const [selected, setSelected] = useState<PaymentProvider>("moneyfusion");
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState<string | null>(null);
-
-  // Validation early return
-  if (amount <= 0) {
-    console.error("PaymentMethodSelector: amount must be > 0");
-    onClose();
-    return null;
-  }
 
   async function handlePay() {
     setLoading(true);
     setError(null);
 
-    try {
-      if (selected === "moneyfusion") {
-        await handleMoneyFusion();
-      } else {
-        await handleStripe();
-      }
-    } catch (err) {
-      setError("Une erreur inattendue s'est produite");
-      console.error(err);
-    } finally {
-      setLoading(false);
+    if (selected === "moneyfusion") {
+      await handleMoneyFusion();
+    } else {
+      await handleStripe();
     }
+
+    setLoading(false);
   }
 
   async function handleMoneyFusion() {
-    if (!mfPayload.route) {
-      setError("Configuration de paiement invalide");
-      return;
-    }
-
-    const res = await fetch("/api/payments/moneyfusion/create", {
+    const res  = await fetch("/api/payments/moneyfusion/create", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({
@@ -111,47 +101,34 @@ export default function PaymentMethodSelector({
         ...mfPayload.extra,
       }),
     });
-
     const data = await res.json();
-
-    if (!res.ok) {
-      setError(data.error || "Erreur paiement");
-      return;
-    }
-
+    if (!res.ok) { setError(data.error || "Erreur paiement"); return; }
     if (data.redirectUrl) {
-      // Appeler onSuccess avant la redirection
-      onSuccess?.();
       window.location.href = data.redirectUrl;
     } else {
-      setError("Paiement non disponible. Réessayez plus tard.");
+      setError("Paiement Mobile Money non disponible. Réessayez plus tard.");
     }
   }
 
   async function handleStripe() {
-    const res = await fetch("/api/payments/stripe/create", {
+    const res  = await fetch("/api/payments/stripe/create", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({
         amount,
-        currency:    stripePayload.currency ?? "xof",
-        type:        stripePayload.type,
-        recipientId: stripePayload.recipientId,
-        description: stripePayload.description,
+        currency:       stripePayload.currency ?? "xof",
+        type:           stripePayload.type,
+        recipientId:    stripePayload.recipientId,
+        description:    stripePayload.description,
+        tier:           stripePayload.tier,
+        bookingData:    stripePayload.bookingData,
+        messageId:      stripePayload.messageId,
+        conversationId: stripePayload.conversationId,
       }),
     });
-
     const data = await res.json();
+    if (!res.ok) { setError(data.error || "Erreur paiement"); return; }
 
-    if (!res.ok) {
-      setError(data.error || "Erreur paiement");
-      return;
-    }
-
-    // Appeler onSuccess avant la redirection
-    onSuccess?.();
-
-    // Rediriger vers la page de paiement Stripe
     const params = new URLSearchParams({
       clientSecret: data.clientSecret,
       amount:       amount.toString(),
@@ -162,20 +139,18 @@ export default function PaymentMethodSelector({
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50" onClick={onClose}/>
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60]" onClick={onClose}/>
 
-      <div className="fixed inset-x-0 bottom-0 md:inset-0 md:flex md:items-center md:justify-center z-50 pointer-events-none">
+      <div className="fixed inset-x-0 bottom-0 md:inset-0 md:flex md:items-center md:justify-center z-[60] pointer-events-none">
         <div className="pointer-events-auto w-full md:max-w-sm bg-[#1E0A3C] md:rounded-2xl rounded-t-2xl border border-white/10 shadow-2xl overflow-hidden">
 
-          {/* Handle mobile */}
           <div className="flex justify-center pt-3 pb-1 md:hidden">
             <div className="w-10 h-1 bg-white/20 rounded-full"/>
           </div>
 
-          {/* Header */}
           <div className="px-6 pt-4 pb-4 border-b border-white/8 flex items-center justify-between">
             <div>
-              <p className="text-white font-bold">Choisir le paiement</p>
+              <p className="text-white font-bold">Méthode de paiement</p>
               <p className="text-white/40 text-sm mt-0.5">
                 {label ?? `${amount.toLocaleString("fr-FR")} FCFA`}
               </p>
@@ -187,34 +162,24 @@ export default function PaymentMethodSelector({
             </button>
           </div>
 
-          {/* Providers */}
           <div className="px-6 py-4 space-y-3">
             {PROVIDERS.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setSelected(p.id)}
+              <button key={p.id} onClick={() => setSelected(p.id)}
                 className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all text-left ${
-                  selected === p.id ? p.bgActive : `${p.bg} opacity-60 hover:opacity-80`
-                }`}
-              >
-                <div className={`${p.color} flex-shrink-0`}>{p.icon}</div>
+                  selected === p.id ? p.bgActive : p.bgIdle
+                }`}>
+                <div className={`${p.dot} flex-shrink-0`}>{p.icon}</div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-white font-semibold text-sm">{p.name}</p>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                      p.id === "moneyfusion"
-                        ? "bg-amber-400/20 text-amber-400"
-                        : "bg-blue-400/20 text-blue-400"
-                    }`}>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${p.badgeCls}`}>
                       {p.badge}
                     </span>
                   </div>
                   <p className="text-white/40 text-xs mt-0.5">{p.subtitle}</p>
                 </div>
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${
-                  selected === p.id
-                    ? p.id === "moneyfusion" ? "border-amber-400 bg-amber-400" : "border-blue-400 bg-blue-400"
-                    : "border-white/20"
+                  selected === p.id ? p.check : "border-white/20"
                 }`}>
                   {selected === p.id && (
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="3">
@@ -232,13 +197,9 @@ export default function PaymentMethodSelector({
             )}
           </div>
 
-          {/* Footer */}
           <div className="px-6 pb-6 pt-2 border-t border-white/8">
-            <button
-              onClick={handlePay}
-              disabled={loading}
-              className="w-full bg-amber-400 hover:bg-amber-300 disabled:opacity-30 text-black font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
-            >
+            <button onClick={handlePay} disabled={loading}
+              className="w-full bg-amber-400 hover:bg-amber-300 disabled:opacity-30 text-black font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
               {loading ? (
                 <>
                   <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">

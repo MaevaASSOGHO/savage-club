@@ -6,6 +6,7 @@ import Link from "next/link";
 import Avatar from "./Avatar";
 import MessageBubble from "./MessageBubble";
 import { formatDate, timeUntilExpiry, type Conversation, type Message } from "./types";
+import PaymentMethodSelector from "@/components/payments/PaymentMethodSelector";
 
 const TTL_OPTIONS = [
   { value: "1h",  label: "1 heure" },
@@ -33,11 +34,15 @@ export default function ConversationWindow({
   const [hasMore,        setHasMore]        = useState(false);
   const [cursor,         setCursor]         = useState<string | null>(null);
   const [showSettings,   setShowSettings]   = useState(false);
+  const [unlockData,     setUnlockData]     = useState<{
+    msgId: string;
+    amount: number;
+    senderId: string;
+  } | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileRef   = useRef<HTMLInputElement>(null);
 
-  // Charger les messages
   useEffect(() => {
     setLoading(true);
     setMessages([]);
@@ -83,7 +88,6 @@ export default function ConversationWindow({
     setMessages((prev) => [...prev, tmp]);
     const savedText = text.trim();
     setText(""); setPrice(""); setShowPriceInput(false);
-
     const res  = await fetch(`/api/conversations/${conversation.id}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -98,8 +102,8 @@ export default function ConversationWindow({
     const formData = new FormData();
     formData.append("file", file);
     const { url } = await (await fetch("/api/upload", { method: "POST", body: formData })).json();
-    const mediaType    = file.type.startsWith("video/") ? "VIDEO" : "IMAGE";
-    const parsedPrice  = price ? parseInt(price) : undefined;
+    const mediaType   = file.type.startsWith("video/") ? "VIDEO" : "IMAGE";
+    const parsedPrice = price ? parseInt(price) : undefined;
     await fetch(`/api/conversations/${conversation.id}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -131,21 +135,21 @@ export default function ConversationWindow({
       { method: "POST" }
     );
     const data = await res.json();
-
     if (!res.ok) return;
 
-    // Paiement requis → rediriger vers MoneyFusion
-    if (data.requiresPayment) {
-      if (data.redirectUrl) {
-        window.location.href = data.redirectUrl;
-      } else {
-        alert("Le paiement n'a pas pu être initié. Réessayez plus tard.");
-      }
+    // Contenu gratuit → afficher directement
+    if (!data.requiresPayment) {
+      setMessages((prev) => prev.map((m) => m.id === msgId ? { ...data } : m));
       return;
     }
 
-    // Gratuit ou déjà payé → afficher le contenu
-    setMessages((prev) => prev.map((m) => m.id === msgId ? { ...data } : m));
+    // Contenu payant → ouvrir le sélecteur de paiement
+    const msg = messages.find((m) => m.id === msgId);
+    setUnlockData({
+      msgId,
+      amount:   data.amount,
+      senderId: msg?.sender?.id ?? conversation.other?.id ?? "",
+    });
   }
 
   async function handleSetTTL(ttl: string) {
@@ -163,7 +167,6 @@ export default function ConversationWindow({
     onDeleteConv(conversation.id);
   }
 
-  // Grouper les messages par date
   const grouped: { date: string; messages: Message[] }[] = [];
   for (const msg of messages) {
     const dateStr = formatDate(msg.createdAt);
@@ -202,7 +205,6 @@ export default function ConversationWindow({
           </span>
         )}
 
-        {/* Menu — accessible à tous mais options différentes */}
         <div className="relative flex-shrink-0">
           <button onClick={() => setShowSettings((v) => !v)}
             className="text-white/30 hover:text-white transition-colors p-1">
@@ -214,8 +216,6 @@ export default function ConversationWindow({
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowSettings(false)}/>
               <div className="absolute z-20 right-0 top-full mt-1 bg-[#2D1B3F] border border-white/10 rounded-xl shadow-xl py-2 w-52">
-                
-                {/* TTL — créateur seulement */}
                 {isCreator && (
                   <>
                     <p className="px-3 py-1 text-white/30 text-[10px] uppercase tracking-wider">Durée de vie</p>
@@ -228,8 +228,6 @@ export default function ConversationWindow({
                     <div className="border-t border-white/8 mt-1 pt-1"/>
                   </>
                 )}
-
-                {/* Supprimer — tout le monde */}
                 <button onClick={handleDeleteConversation}
                   className="w-full text-left px-3 py-2 text-red-400/70 hover:text-red-400 hover:bg-white/5 text-sm transition-colors">
                   {isCreator ? "🗑 Supprimer la conversation" : "🚪 Quitter la conversation"}
@@ -240,14 +238,12 @@ export default function ConversationWindow({
         </div>
       </div>
 
-      {/* Bannière expirée */}
       {expired && (
         <div className="bg-red-500/10 border-b border-red-500/20 px-4 py-2 text-center">
           <p className="text-red-400 text-xs">Cette conversation a expiré.</p>
         </div>
       )}
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2 min-h-0"
         style={{ userSelect: "none", WebkitUserSelect: "none" }}>
         {hasMore && (
@@ -255,7 +251,6 @@ export default function ConversationWindow({
             Charger les messages précédents
           </button>
         )}
-
         {loading && (
           <div className="flex justify-center py-8">
             <svg className="animate-spin w-5 h-5 text-amber-400" viewBox="0 0 24 24" fill="none">
@@ -264,7 +259,6 @@ export default function ConversationWindow({
             </svg>
           </div>
         )}
-
         {grouped.map((group) => (
           <div key={group.date}>
             <div className="flex items-center gap-3 py-2">
@@ -275,8 +269,7 @@ export default function ConversationWindow({
             <div className="space-y-2">
               {group.messages.map((msg) => (
                 <MessageBubble
-                  key={msg.id}
-                  msg={msg}
+                  key={msg.id} msg={msg}
                   isMine={msg.senderId === currentUserId}
                   onDelete={handleDelete}
                   onUnlock={handleUnlock}
@@ -289,7 +282,6 @@ export default function ConversationWindow({
         <div ref={bottomRef}/>
       </div>
 
-      {/* Saisie */}
       {!expired && (
         <div className="border-t border-white/8 flex-shrink-0">
           {isCreator && showPriceInput && (
@@ -304,7 +296,6 @@ export default function ConversationWindow({
                 className="text-white/30 hover:text-white/60 text-xs">✕</button>
             </div>
           )}
-
           <div className="flex items-center gap-2.5 px-4 py-3">
             <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden"
               onChange={(e) => e.target.files?.[0] && sendMedia(e.target.files[0])}
@@ -316,18 +307,15 @@ export default function ConversationWindow({
                 <polyline points="21 15 16 10 5 21"/>
               </svg>
             </button>
-
             {isCreator && (
               <button onClick={() => setShowPriceInput((v) => !v)}
-                className={`transition-colors ${showPriceInput ? "text-amber-400" : "text-white/30 hover:text-amber-400/60"}`}
-                title="Contenu payant">
+                className={`transition-colors ${showPriceInput ? "text-amber-400" : "text-white/30 hover:text-amber-400/60"}`}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <line x1="12" y1="1" x2="12" y2="23"/>
                   <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
                 </svg>
               </button>
             )}
-
             <input type="text" value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
@@ -343,6 +331,29 @@ export default function ConversationWindow({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Sélecteur de paiement pour déblocage contenu */}
+      {unlockData && (
+        <PaymentMethodSelector
+          amount={unlockData.amount}
+          label={`Débloquer le contenu — ${unlockData.amount.toLocaleString("fr-FR")} FCFA`}
+          onClose={() => setUnlockData(null)}
+          mfPayload={{
+            type:        "MESSAGE",
+            recipientId: unlockData.senderId,
+            route:       "unlock",
+            extra: {
+              messageId:      unlockData.msgId,
+              conversationId: conversation.id,
+            },
+          }}
+          stripePayload={{
+            type:        "MESSAGE",
+            recipientId: unlockData.senderId,
+            description: "Déblocage contenu payant",
+          }}
+        />
       )}
     </div>
   );
