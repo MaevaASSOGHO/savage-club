@@ -261,6 +261,7 @@ export default function SubscribeModal({
             type:        "SUBSCRIPTION",
             recipientId: creatorId,
             description: `Abonnement ${selected} — ${displayName ?? username}`,
+            tier:        selected,
           }}
         />
       )}
