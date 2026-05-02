@@ -15,6 +15,12 @@ function ConfirmInner() {
   const type  = searchParams.get("type");
 
   useEffect(() => {
+    // Cas Stripe — redirect_status est dans l'URL
+    const redirectStatus = searchParams.get("redirect_status");
+    if (redirectStatus === "succeeded") { setStatus("success"); return; }
+    if (redirectStatus === "failed")    { setStatus("failed");  return; }
+
+    // Cas MoneyFusion — token dans l'URL
     if (!token) { setStatus("failed"); return; }
 
     async function check() {
