@@ -43,6 +43,12 @@ export async function POST(req: Request) {
     switch (type) {
 
       case "SUBSCRIPTION": {
+
+        console.log("[Stripe SUBSCRIPTION] tier:", tier, "userId:", userId, "recipientId:", recipientId);
+        if (!tier || !userId || !recipientId) {
+          console.log("[Stripe SUBSCRIPTION] Métadonnées manquantes — skipping");
+          break;
+        }
         if (!tier || !userId || !recipientId) break;
         const existing = await prisma.subscription.findFirst({
           where: { subscriberId: userId, creatorId: recipientId, status: "ACTIVE" },
