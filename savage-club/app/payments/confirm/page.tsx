@@ -3,8 +3,6 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter }    from "next/navigation";
-import { checkMFPaymentStatus }          from "@/lib/payments/providers/moneyfusion";
-import Link from "next/link";
 
 function ConfirmInner() {
   const searchParams = useSearchParams();
@@ -12,8 +10,12 @@ function ConfirmInner() {
   const token        = searchParams.get("token");
 
   const [status, setStatus] = useState<"loading" | "success" | "failed" | "pending">("loading");
-  const type  = searchParams.get("type");
-  const returnTo = searchParams.get("returnTo") ?? "/";
+  
+  // type = "message" | "booking" | "subscription" | null
+  const type     = searchParams.get("type");
+  // returnTo = URL vers laquelle revenir (profil du créateur par ex.)
+  // PAS de valeur par défaut — null si absent
+  const returnTo = searchParams.get("returnTo");
 
   useEffect(() => {
     // Cas Stripe — redirect_status est dans l'URL
@@ -26,12 +28,12 @@ function ConfirmInner() {
 
     async function check() {
       try {
-        const res = await fetch(`/api/payments/moneyfusion/status?token=${token}`);
+        const res  = await fetch(`/api/payments/moneyfusion/status?token=${token}`);
         const data = await res.json();
-        const s = data.statut;
-        if (s === "paid")           setStatus("success");
+        const s    = data.statut;
+        if (s === "paid")                        setStatus("success");
         else if (s === "failure" || s === "no paid") setStatus("failed");
-        else                        setStatus("pending");
+        else                                     setStatus("pending");
       } catch {
         setStatus("failed");
       }
@@ -39,6 +41,21 @@ function ConfirmInner() {
 
     check();
   }, [token]);
+
+  // Destination selon le type de paiement
+  function getDestination(): string {
+    if (type === "message")  return "/messages";
+    if (type === "booking")  return "/parametres?section=reservations";
+    if (returnTo)            return returnTo;
+    return "/";
+  }
+
+  function getButtonLabel(): string {
+    if (type === "message") return "Retour aux messages";
+    if (type === "booking") return "Voir mes réservations";
+    if (returnTo)           return "Retour au profil";
+    return "Retour à l'accueil";
+  }
 
   return (
     <div className="min-h-screen bg-[#1a0533] flex items-center justify-center px-4">
@@ -63,17 +80,10 @@ function ConfirmInner() {
               <p className="text-white font-bold text-xl">Paiement réussi !</p>
               <p className="text-white/40 text-sm mt-2">Votre paiement a été confirmé.</p>
             </div>
-            <button onClick={() => router.push(
-              type === "message"      ? "/messages" :
-              type === "booking"      ? "/parametres?section=reservations" :
-              returnTo                ? returnTo :
-              "/"
-            )}
+            <button
+              onClick={() => router.push(getDestination())}
               className="w-full bg-amber-400 hover:bg-amber-300 text-black font-bold py-3 rounded-xl transition-all">
-              {type === "message"     ? "Retour aux messages" :
-              type === "booking"     ? "Voir mes réservations" :
-              returnTo               ? "Retour au profil" :
-              "Retour à l'accueil"}
+              {getButtonLabel()}
             </button>
           </>
         )}
@@ -103,9 +113,9 @@ function ConfirmInner() {
               <p className="text-white font-bold text-xl">Paiement en cours</p>
               <p className="text-white/40 text-sm mt-2">Validez le paiement sur votre téléphone.</p>
             </div>
-            <button onClick={() => router.push("/")}
+            <button onClick={() => router.push(getDestination())}
               className="w-full bg-amber-400 hover:bg-amber-300 text-black font-bold py-3 rounded-xl transition-all">
-              Retour à l'accueil
+              {getButtonLabel()}
             </button>
           </>
         )}

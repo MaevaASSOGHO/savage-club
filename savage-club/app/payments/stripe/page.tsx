@@ -13,7 +13,13 @@ import {
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
-function CheckoutForm({ amountFcfa, amountEur }: { amountFcfa: number; amountEur: string }) {
+function CheckoutForm({
+  amountFcfa, amountEur, returnUrl,
+}: {
+  amountFcfa: number;
+  amountEur: string;
+  returnUrl: string;
+}) {
   const stripe   = useStripe();
   const elements = useElements();
   const [loading, setLoading] = useState(false);
@@ -28,7 +34,8 @@ function CheckoutForm({ amountFcfa, amountEur }: { amountFcfa: number; amountEur
     const { error: stripeError } = await stripe.confirmPayment({
       elements,
       confirmParams: {
-        return_url: `${window.location.origin}/payments/confirm?type=stripe`,
+        // return_url inclut le vrai type et returnTo
+        return_url: returnUrl,
       },
     });
 
@@ -40,14 +47,13 @@ function CheckoutForm({ amountFcfa, amountEur }: { amountFcfa: number; amountEur
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Récap montant */}
       <div className="bg-white/5 border border-white/8 rounded-xl p-4 space-y-1">
         <div className="flex justify-between text-sm">
           <span className="text-white/50">Montant</span>
           <span className="text-white font-bold">{amountFcfa.toLocaleString("fr-FR")} FCFA</span>
         </div>
         <div className="flex justify-between text-xs">
-          <span className="text-white/30">Équivalent</span>
+          <span className="text-white/30">Équivalent facturé</span>
           <span className="text-white/40">≈ {amountEur} EUR</span>
         </div>
       </div>
@@ -60,11 +66,8 @@ function CheckoutForm({ amountFcfa, amountEur }: { amountFcfa: number; amountEur
         </div>
       )}
 
-      <button
-        type="submit"
-        disabled={!stripe || loading}
-        className="w-full bg-amber-400 hover:bg-amber-300 disabled:opacity-30 text-black font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
-      >
+      <button type="submit" disabled={!stripe || loading}
+        className="w-full bg-amber-400 hover:bg-amber-300 disabled:opacity-30 text-black font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
         {loading ? (
           <>
             <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
@@ -87,6 +90,9 @@ function StripePageInner() {
   const amountFcfa   = parseInt(searchParams.get("amount") ?? "0");
   const amountEur    = searchParams.get("amountEur") ?? (amountFcfa * 0.00152).toFixed(2);
   const description  = searchParams.get("description") ?? "Paiement Savage Club";
+  // type et returnTo passés depuis PaymentMethodSelector
+  const type         = searchParams.get("type") ?? "";
+  const returnTo     = searchParams.get("returnTo") ?? "";
 
   if (!clientSecret) {
     return (
@@ -96,17 +102,22 @@ function StripePageInner() {
     );
   }
 
+  // Construire la return_url avec le vrai type et returnTo
+  const origin    = typeof window !== "undefined" ? window.location.origin : "https://savage-club.vercel.app";
+  const params    = new URLSearchParams();
+  if (type)     params.set("type",     type);
+  if (returnTo) params.set("returnTo", returnTo);
+  const returnUrl = `${origin}/payments/confirm?${params.toString()}`;
+
   return (
     <div className="min-h-screen bg-[#1a0533] flex items-center justify-center px-4">
       <div className="max-w-md w-full space-y-6">
 
-        {/* Header */}
         <div className="text-center space-y-1">
           <h1 className="text-white font-black text-xl">Savage Club</h1>
           <p className="text-white/40 text-sm">{description}</p>
         </div>
 
-        {/* Formulaire */}
         <div className="bg-[#1E0A3C] border border-white/10 rounded-2xl p-6">
           <Elements
             stripe={stripePromise}
@@ -115,17 +126,17 @@ function StripePageInner() {
               appearance: {
                 theme: "night",
                 variables: {
-                  colorPrimary:    "#F59E0B",
-                  colorBackground: "#1E0A3C",
-                  colorText:       "#ffffff",
+                  colorPrimary:       "#F59E0B",
+                  colorBackground:    "#1E0A3C",
+                  colorText:          "#ffffff",
                   colorTextSecondary: "rgba(255,255,255,0.5)",
-                  borderRadius:    "12px",
-                  fontFamily:      "system-ui, sans-serif",
+                  borderRadius:       "12px",
+                  fontFamily:         "system-ui, sans-serif",
                 },
               },
             }}
           >
-            <CheckoutForm amountFcfa={amountFcfa} amountEur={amountEur}/>
+            <CheckoutForm amountFcfa={amountFcfa} amountEur={amountEur} returnUrl={returnUrl}/>
           </Elements>
         </div>
 

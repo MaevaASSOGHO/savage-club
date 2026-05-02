@@ -11,21 +11,21 @@ type Props = {
   label?: string;
   onClose: () => void;
   mfPayload: {
-    type:        string;
-    recipientId: string;
+    type:         string;
+    recipientId:  string;
     description?: string;
-    tier?:       string;
-    returnTo?: string;
-    route:       "subscription" | "booking" | "unlock";
-    extra?:      Record<string, any>;
+    tier?:        string;
+    returnTo?:    string;
+    route:        "subscription" | "booking" | "unlock";
+    extra?:       Record<string, any>;
   };
   stripePayload: {
-    type:        string;
-    recipientId: string;
-    description?: string;
-    tier?:       string;
-    returnTo?: string;
-    bookingData?: Record<string, any>;
+    type:            string;
+    recipientId:     string;
+    description?:    string;
+    tier?:           string;
+    returnTo?:       string;
+    bookingData?:    Record<string, any>;
     messageId?:      string;
     conversationId?: string;
   };
@@ -73,7 +73,7 @@ const FCFA_TO_EUR = 0.00152;
 export default function PaymentMethodSelector({
   amount, label, onClose, mfPayload, stripePayload,
 }: Props) {
-  const router   = useRouter();
+  const router     = useRouter();
   const [selected, setSelected] = useState<PaymentProvider>("moneyfusion");
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState<string | null>(null);
@@ -128,13 +128,17 @@ export default function PaymentMethodSelector({
     const data = await res.json();
     if (!res.ok) { setError(data.error || "Erreur paiement"); return; }
 
+    // Passer le vrai type (message/booking/subscription) et returnTo à la page Stripe
+    // pour que le return_url soit correct
     const params = new URLSearchParams({
       clientSecret: data.clientSecret,
       amount:       amount.toString(),
       amountEur:    data.amountEur ?? amountEur,
       description:  stripePayload.description ?? "Paiement Savage Club",
-      returnTo:     stripePayload.returnTo ?? "/",
+      type:         stripePayload.type,  // ← vrai type, pas "stripe"
     });
+    if (stripePayload.returnTo) params.set("returnTo", stripePayload.returnTo);
+
     router.push(`/payments/stripe?${params.toString()}`);
   }
 
@@ -178,7 +182,6 @@ export default function PaymentMethodSelector({
                     </span>
                   </div>
                   <p className="text-white/40 text-xs mt-0.5">{p.subtitle}</p>
-                  {/* Afficher le montant selon le provider */}
                   <p className={`text-xs font-semibold mt-1 ${p.dot}`}>
                     {p.id === "moneyfusion"
                       ? `${amount.toLocaleString("fr-FR")} FCFA`

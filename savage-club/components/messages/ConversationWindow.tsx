@@ -35,18 +35,15 @@ export default function ConversationWindow({
   const [cursor,         setCursor]         = useState<string | null>(null);
   const [showSettings,   setShowSettings]   = useState(false);
   const [unlockData,     setUnlockData]     = useState<{
-    msgId: string;
-    amount: number;
+    msgId:    string;
+    amount:   number;
     senderId: string;
   } | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileRef   = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    setLoading(true);
-    setMessages([]);
-    setExpired(false);
+  function fetchMessages() {
     fetch(`/api/conversations/${conversation.id}/messages`)
       .then((r) => {
         if (r.status === 410) { setExpired(true); return null; }
@@ -59,6 +56,26 @@ export default function ConversationWindow({
         setCursor(data.nextCursor);
       })
       .finally(() => setLoading(false));
+  }
+
+  // Charger les messages au montage
+  useEffect(() => {
+    setLoading(true);
+    setMessages([]);
+    setExpired(false);
+    fetchMessages();
+  }, [conversation.id]);
+
+  // Recharger les messages quand l'utilisateur revient sur la page
+  // (après un paiement Stripe ou MF)
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        fetchMessages();
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [conversation.id]);
 
   useEffect(() => {
@@ -343,15 +360,19 @@ export default function ConversationWindow({
             type:        "MESSAGE",
             recipientId: unlockData.senderId,
             route:       "unlock",
+            returnTo:    "/messages",
             extra: {
               messageId:      unlockData.msgId,
               conversationId: conversation.id,
             },
           }}
           stripePayload={{
-            type:        "MESSAGE",
-            recipientId: unlockData.senderId,
-            description: "Déblocage contenu payant",
+            type:           "MESSAGE",
+            recipientId:    unlockData.senderId,
+            description:    "Déblocage contenu payant",
+            returnTo:       "/messages",
+            messageId:      unlockData.msgId,
+            conversationId: conversation.id,
           }}
         />
       )}
