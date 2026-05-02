@@ -4,6 +4,8 @@ import { NextRequest, NextResponse }     from "next/server";
 import { createMFPayment }               from "@/lib/payments/providers/moneyfusion";
 import { prisma }                        from "@/lib/prisma";
 
+const APP_URL = process.env.NEXTAUTH_URL || "https://savage-club.vercel.app";
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -11,7 +13,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Non connecté" }, { status: 401 });
     }
 
-    const { amount, type, recipientId, description, tier } = await req.json();
+    const { amount, type, recipientId, description, tier, returnTo } = await req.json();
 
     if (!amount || !type || !recipientId) {
       return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 });
@@ -46,6 +48,8 @@ export async function POST(req: NextRequest) {
       userId:     user.id,
       type,
       tier:       tier ?? "",
+      returnUrl:  `${APP_URL}/payments/confirm?returnTo=${encodeURIComponent(returnTo ?? "/")}`,
+
     });
 
     await prisma.payment.update({

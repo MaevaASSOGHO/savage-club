@@ -13,6 +13,7 @@ function ConfirmInner() {
 
   const [status, setStatus] = useState<"loading" | "success" | "failed" | "pending">("loading");
   const type  = searchParams.get("type");
+  const returnTo = searchParams.get("returnTo") ?? "/";
 
   useEffect(() => {
     // Cas Stripe — redirect_status est dans l'URL
@@ -63,13 +64,15 @@ function ConfirmInner() {
               <p className="text-white/40 text-sm mt-2">Votre paiement a été confirmé.</p>
             </div>
             <button onClick={() => router.push(
-              type === "message" ? "/messages" :
-              type === "booking" ? "/parametres?section=reservations" :
+              type === "message"      ? "/messages" :
+              type === "booking"      ? "/parametres?section=reservations" :
+              returnTo                ? returnTo :
               "/"
             )}
               className="w-full bg-amber-400 hover:bg-amber-300 text-black font-bold py-3 rounded-xl transition-all">
-              {type === "message" ? "Retour aux messages" :
-              type === "booking" ? "Voir mes réservations" :
+              {type === "message"     ? "Retour aux messages" :
+              type === "booking"     ? "Voir mes réservations" :
+              returnTo               ? "Retour au profil" :
               "Retour à l'accueil"}
             </button>
           </>

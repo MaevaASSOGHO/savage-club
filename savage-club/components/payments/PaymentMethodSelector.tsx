@@ -15,6 +15,7 @@ type Props = {
     recipientId: string;
     description?: string;
     tier?:       string;
+    returnTo?: string;
     route:       "subscription" | "booking" | "unlock";
     extra?:      Record<string, any>;
   };
@@ -23,6 +24,7 @@ type Props = {
     recipientId: string;
     description?: string;
     tier?:       string;
+    returnTo?: string;
     bookingData?: Record<string, any>;
     messageId?:      string;
     conversationId?: string;
@@ -95,6 +97,7 @@ export default function PaymentMethodSelector({
         recipientId: mfPayload.recipientId,
         description: mfPayload.description,
         tier:        mfPayload.tier,
+        returnTo:    mfPayload.returnTo,
         ...mfPayload.extra,
       }),
     });
@@ -130,6 +133,7 @@ export default function PaymentMethodSelector({
       amount:       amount.toString(),
       amountEur:    data.amountEur ?? amountEur,
       description:  stripePayload.description ?? "Paiement Savage Club",
+      returnTo:     stripePayload.returnTo ?? "/",
     });
     router.push(`/payments/stripe?${params.toString()}`);
   }

@@ -256,12 +256,16 @@ export default function SubscribeModal({
             recipientId: creatorId,
             tier:        selected,
             route:       "subscription",
+            extra: {
+              returnUrl: `https://savage-club.vercel.app/payments/confirm?returnTo=/profil/${username}`,
+            },
           }}
           stripePayload={{
             type:        "SUBSCRIPTION",
             recipientId: creatorId,
             description: `Abonnement ${selected} — ${displayName ?? username}`,
             tier:        selected,
+            returnTo:    `/profil/${username}`,
           }}
         />
       )}
