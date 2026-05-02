@@ -94,7 +94,8 @@ export async function POST(req: NextRequest) {
           break;
         }
 
-        case "MESSAGE_UNLOCK": {
+        case "MESSAGE_UNLOCK": 
+        case "MESSAGE": {
           if (!info?.messageId) break;
           // Débloquer le message
           await prisma.message.update({

@@ -361,7 +361,7 @@ export default function ConversationWindow({
           label={`Débloquer le contenu — ${unlockData.amount.toLocaleString("fr-FR")} FCFA`}
           onClose={() => setUnlockData(null)}
           mfPayload={{
-            type:        "MESSAGE",
+            type:        "MESSAGE_UNLOCK",
             recipientId: unlockData.senderId,
             route:       "unlock",
             returnTo:    "/messages",

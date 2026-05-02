@@ -120,7 +120,8 @@ export async function POST(req: Request) {
         break;
       }
 
-      case "MESSAGE": {
+      case "MESSAGE": 
+      case "MESSAGE_UNLOCK": {
         if (!messageId) break;
         // Débloquer le message
         await prisma.message.update({
