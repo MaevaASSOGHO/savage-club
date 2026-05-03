@@ -40,6 +40,21 @@ export async function GET(
     }
   }
 
+  // Filtrage des posts selon le paiement
+  let purchasedPostIds: string[] = [];
+  if (session?.user?.email && !isOwner) {
+    const viewer = await prisma.user.findUnique({
+      where:  { email: session.user.email },
+      select: { id: true },
+    });
+    if (viewer) {
+      const purchases = await prisma.postPurchase.findMany({
+        where:  { userId: viewer.id },
+        select: { postId: true },
+      });
+      purchasedPostIds = purchases.map((p) => p.postId);
+    }
+  }
   // Filtre selon l'onglet — pas de filtre visibility, on retourne tout
   let where: any = {
     userId: profileUser.id,
@@ -71,20 +86,19 @@ export async function GET(
   return NextResponse.json({
     posts: items.map((p) => {
       // Masquer les URLs pour les posts abonnés si non abonné
+      const isPurchased = purchasedPostIds.includes(p.id);
       const isLocked = !isOwner && p.visibility === "SUBSCRIBERS" && !isSubscriber;
       return {
         id:         p.id,
         content:    p.content ?? "",
         visibility: p.visibility,
-        price:      p.price,
         previewUrl: p.previewUrl,
         // Si verrouillé → pas d'URL réelle exposée
-        medias:     isLocked
-          ? [{ id: "locked", url: "", type: "IMAGE", order: 0 }]
-          : p.PostMedia,
+        medias:  p.PostMedia,
         likes:      p.Like,
         comments:   p.Comment,
         locked:     isLocked,
+        price:   isPurchased ? null : p.price,
       };
     }),
     nextCursor,
