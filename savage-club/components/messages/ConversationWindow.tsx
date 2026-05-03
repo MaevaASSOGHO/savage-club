@@ -67,16 +67,15 @@ export default function ConversationWindow({
   }, [conversation.id]);
 
   // Recharger les messages quand l'utilisateur revient sur la page
-  // Polling pendant 30s pour laisser le webhook MF s'exécuter
+  // (après un paiement Stripe ou MF)
   useEffect(() => {
     function handleVisibilityChange() {
       if (document.visibilityState === "visible") {
-        let count = 0;
-        const interval = setInterval(() => {
-          fetchMessages();
-          count++;
-          if (count >= 10) clearInterval(interval);
-        }, 3000);
+        // Recharger immédiatement
+        fetchMessages();
+        // Et encore après 2s et 5s pour laisser le webhook s'exécuter
+        setTimeout(fetchMessages, 2000);
+        setTimeout(fetchMessages, 5000);
       }
     }
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -120,21 +119,39 @@ export default function ConversationWindow({
     setMessages((prev) => prev.map((m) => m.id === tmp.id ? real : m));
   }
 
+  const [uploading, setUploading] = useState(false);
+
   async function sendMedia(file: File) {
-    const formData = new FormData();
-    formData.append("file", file);
-    const { url } = await (await fetch("/api/upload", { method: "POST", body: formData })).json();
-    const mediaType   = file.type.startsWith("video/") ? "VIDEO" : "IMAGE";
-    const parsedPrice = price ? parseInt(price) : undefined;
-    await fetch(`/api/conversations/${conversation.id}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "", mediaUrl: url, mediaType, price: parsedPrice }),
-    });
-    const data = await (await fetch(`/api/conversations/${conversation.id}/messages`)).json();
-    setMessages(data.messages ?? []);
-    setPrice(""); setShowPriceInput(false);
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadRes  = await fetch(`/api/upload`, { method: "POST", body: formData });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok || !uploadData.url) return;
+
+      const { url, type: mediaType, filename } = uploadData;
+      const parsedPrice = price ? parseInt(price) : undefined;
+
+      await fetch(`/api/conversations/${conversation.id}/messages`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          content:   mediaType === "DOCUMENT" ? (filename ?? file.name) : "",
+          mediaUrl:  url,
+          mediaType: mediaType ?? (file.type.startsWith("video/") ? "VIDEO" : "IMAGE"),
+          price:     parsedPrice,
+        }),
+      });
+
+      const data = await (await fetch(`/api/conversations/${conversation.id}/messages`)).json();
+      setMessages(data.messages ?? []);
+      setPrice(""); setShowPriceInput(false);
+    } finally {
+      setUploading(false);
+    }
   }
+
 
   async function handleDelete(msgId: string, forEveryone: boolean) {
     await fetch(`/api/conversations/${conversation.id}/messages/${msgId}`, {
@@ -319,15 +336,25 @@ export default function ConversationWindow({
             </div>
           )}
           <div className="flex items-center gap-2.5 px-4 py-3">
-            <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden"
+            <input ref={fileRef} type="file"
+              accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+              className="hidden"
               onChange={(e) => e.target.files?.[0] && sendMedia(e.target.files[0])}
             />
-            <button onClick={() => fileRef.current?.click()} className="text-white/30 hover:text-white/60 transition-colors">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/>
-                <polyline points="21 15 16 10 5 21"/>
-              </svg>
+            <button onClick={() => fileRef.current?.click()} disabled={uploading}
+              className="text-white/30 hover:text-white/60 disabled:opacity-30 transition-colors">
+              {uploading ? (
+                <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                </svg>
+              )}
             </button>
             {isCreator && (
               <button onClick={() => setShowPriceInput((v) => !v)}
