@@ -169,7 +169,7 @@ export default function ConversationWindow({
     setUnlockData({
       msgId,
       amount:   data.amount,
-      senderId: msg?.sender?.id ?? conversation.other?.id ?? "",
+      senderId: data.senderId ?? msg?.sender?.id ?? conversation.other?.id ?? "",
     });
   }
 

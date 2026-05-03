@@ -45,62 +45,13 @@ export async function POST(
     return NextResponse.json({ ...message, isUnlocked: true, locked: false });
   }
 
-  // Contenu payant → créer paiement PENDING + initier MoneyFusion
-  const payment = await prisma.payment.create({
-    data: {
-      id:            crypto.randomUUID(),
-      amount:        message.price,
-      status:        "PENDING",
-      type:          "MESSAGE",
-      provider:      "MONEYFUSION",
-      platformFee:   Math.round(message.price * 0.1),
-      creatorAmount: Math.round(message.price * 0.9),
-      description:   "Contenu payant",
-      payerId:       user.id,
-      recipientId:   message.senderId,
-    },
-  });
-
-  const PROXY_URL = `${process.env.API_URL}/payments/moneyfusion/create`;
-  const APP_URL   = process.env.NEXTAUTH_URL || "https://savage-club.vercel.app";
-  let redirectUrl: string | null = null;
-
-  try {
-    const mfRes = await fetch(PROXY_URL, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({
-        totalPrice:    message.price,
-        article:       [{ savage_club: message.price }],
-        numeroSend:    "0000000000",
-        nomclient:     user.displayName || user.username || "Utilisateur",
-        personal_Info: [{
-          paymentId:      payment.id,
-          userId:         user.id,
-          type:           "MESSAGE_UNLOCK",
-          messageId:      msgId,
-          conversationId,
-        }],
-        return_url: `${APP_URL}/payments/confirm?type=message`,
-        webhook_url: `${APP_URL}/api/webhooks/moneyfusion`,
-      }),
-    });
-
-    const mfData = await mfRes.json();
-    if (mfData.statut) {
-      await prisma.payment.update({
-        where: { id: payment.id },
-        data:  { providerRef: mfData.token },
-      });
-      redirectUrl = mfData.url;
-    }
-  } catch (err) {
-    console.error("[Unlock] Erreur MoneyFusion:", err);
-  }
-
+  // Contenu payant → juste retourner les infos
+  // PaymentMethodSelector gère la création du paiement (MF ou Stripe)
   return NextResponse.json({
     requiresPayment: true,
-    redirectUrl,
     amount:          message.price,
+    senderId:        message.senderId,
+    messageId:       msgId,
+    conversationId,
   });
 }
