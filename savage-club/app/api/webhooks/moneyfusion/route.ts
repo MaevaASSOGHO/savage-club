@@ -116,7 +116,11 @@ export async function POST(req: NextRequest) {
         }
 
         case "CUSTOM_CONTENT": {
-          if (!info?.postId) break;
+            console.log("[CUSTOM_CONTENT] info:", JSON.stringify(info));
+          if (!info?.postId) {
+    console.log("[CUSTOM_CONTENT] postId manquant — skip");
+    break;
+          }
           await prisma.postPurchase.upsert({
             where:  { userId_postId: { userId: payment.payerId, postId: info.postId } },
             update: {},
