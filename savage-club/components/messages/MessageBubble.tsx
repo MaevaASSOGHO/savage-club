@@ -66,29 +66,30 @@ function MessageWatermark({ msgId }: { msgId: string }) {
 }
 
 // ── Lightbox plein écran ───────────────────────────────────────────────────
-function Lightbox({ url, onClose }: { url: string; onClose: () => void }) {
+function Lightbox({ url, msgId, onClose }: { url: string; msgId: string; onClose: () => void }) {
   return (
     <div
       className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center"
       onClick={onClose}
     >
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors z-10"
-      >
+      <button onClick={onClose} className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors z-10">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
       </button>
-      <img
-        src={url}
-        alt=""
-        className="max-w-full max-h-full object-contain"
-        onClick={(e) => e.stopPropagation()}
-        draggable={false}
-        onContextMenu={(e) => e.preventDefault()}
-        style={{ userSelect: "none", WebkitUserSelect: "none" }}
-      />
+
+      {/* Conteneur relatif pour le watermark */}
+      <div className="relative" onClick={(e) => e.stopPropagation()}>
+        <img
+          src={url}
+          alt=""
+          className="max-w-[90vw] max-h-[90vh] object-contain"
+          draggable={false}
+          onContextMenu={(e) => e.preventDefault()}
+          style={{ userSelect: "none", WebkitUserSelect: "none" }}
+        />
+        <MessageWatermark msgId={msgId}/>
+      </div>
     </div>
   );
 }
@@ -237,7 +238,7 @@ export default function MessageBubble({
 
       {/* Lightbox plein écran */}
       {lightboxUrl && (
-        <Lightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)}/>
+        <Lightbox url={lightboxUrl} msgId={msg.id} onClose={() => setLightboxUrl(null)}/>
       )}
     </>
   );
