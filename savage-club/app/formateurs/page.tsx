@@ -1,15 +1,38 @@
 // app/formateurs/page.tsx
-import { prisma }    from "@/lib/prisma";
-import PostCard      from "@/components/PostCard";
-import FeedLayout    from "@/components/FeedLayout";
+import { getServerSession, authOptions } from "@/lib/auth-compat";
+import { prisma }     from "@/lib/prisma";
+import PostCard       from "@/components/PostCard";
+import FeedLayout     from "@/components/FeedLayout";
 
 export const dynamic = "force-dynamic";
 
 export default async function FormateursPage() {
+  const session = await getServerSession(authOptions);
+
+  let subscribedCreatorIds: string[] = [];
+
+  if (session?.user?.email) {
+    const user = await prisma.user.findUnique({
+      where:  { email: session.user.email },
+      select: { id: true },
+    });
+    if (user) {
+      const subs = await prisma.subscription.findMany({
+        where:  { subscriberId: user.id, status: "ACTIVE" },
+        select: { creatorId: true },
+      });
+      subscribedCreatorIds = subs.map((s) => s.creatorId);
+    }
+  }
+
   const postsFromDb = await prisma.post.findMany({
     where: {
       User:   { role: "TRAINER" },
       status: "PUBLISHED",
+      OR: [
+        { visibility: "PUBLIC" },
+        { visibility: "SUBSCRIBERS", userId: { in: subscribedCreatorIds } },
+      ],
     },
     include: {
       User: {
