@@ -53,20 +53,29 @@ export default async function PostPage({
   let viewerLiked = false;
   let viewerSaved = false;
   let viewerId: string | null = null;
+  let postUnlocked = false;
 
   if (session?.user?.email) {
     const viewer = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where:  { email: session.user.email },
       select: { id: true },
     });
     if (viewer) {
-      viewerId = viewer.id;
+      viewerId    = viewer.id;
       viewerLiked = post.Like.some((l) => l.userId === viewer.id);
       const saved = await prisma.savedPost.findUnique({
         where: { userId_postId: { userId: viewer.id, postId: id } },
       });
       viewerSaved = !!saved;
+
+    // Vérifier si le post payant a été acheté
+    if (post.price && post.price > 0) {
+      const purchase = await prisma.postPurchase.findUnique({
+        where: { userId_postId: { userId: viewer.id, postId: id } },
+      });
+      postUnlocked = !!purchase;
     }
+   }
   }
 
   return (
@@ -79,6 +88,8 @@ export default async function PostPage({
             content:    post.content ?? "",
             createdAt:  post.createdAt.toISOString(),
             visibility: post.visibility,
+            price:      post.price,
+            previewUrl: post.previewUrl,
             medias:     post.PostMedia,
             likes:      post.Like,
             user: {
@@ -105,6 +116,7 @@ export default async function PostPage({
           viewerLiked={viewerLiked}
           viewerSaved={viewerSaved}
           viewerId={viewerId}
+          postUnlocked={postUnlocked}
         />
       </main>
     </div>

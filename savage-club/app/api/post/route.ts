@@ -1,6 +1,6 @@
-import { getServerSession, authOptions } from "@/lib/auth-compat";
-// app/api/posts/route.ts
+// app/api/post/route.ts
 import { prisma } from "@/lib/prisma";
+import { getServerSession, authOptions } from "@/lib/auth-compat";
 
 
 import { NextResponse } from "next/server";
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     console.log("📝 Body reçu:", JSON.stringify(body, null, 2)); // 👈 Log du body
 
-    const { content, category, visibility, price, medias } = body;
+    const { content, category, visibility, price, previewUrl, medias } = body;
 
     // Validation des données
     if (!content && (!medias || medias.length === 0)) {
@@ -86,8 +86,9 @@ export async function POST(req: Request) {
         category: category || null,
         createdAt: new Date(),
         updatedAt: new Date(),
-        visibility: visibility ?? "PUBLIC",
-        price: price ? parseInt(price) : null,
+        visibility: price && parseInt(price) > 0 ? "SUBSCRIBERS" : (visibility ?? "PUBLIC"),
+        price:      price ? parseInt(price) : null,
+        previewUrl: previewUrl ?? null,
         status: "PUBLISHED",
         userId: user.id,
         PostMedia: medias && medias.length > 0 ? {

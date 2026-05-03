@@ -140,6 +140,22 @@ export async function POST(req: Request) {
         });
         break;
       }
+
+      case "CUSTOM_CONTENT": {
+        const postId = intent.metadata.postId;
+        if (!postId || !userId) break;
+        await prisma.postPurchase.upsert({
+          where:  { userId_postId: { userId, postId } },
+          update: {},
+          create: {
+            id:        crypto.randomUUID(),
+            userId,
+            postId,
+            paymentId,
+          },
+        });
+        break;
+      }
     }
 
     console.log("[Stripe Webhook] Paiement confirmé:", paymentId, type);

@@ -22,7 +22,8 @@ export default function CreatePage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const { user } = useCurrentUser();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef    = useRef<HTMLInputElement>(null);
+  const previewInputRef = useRef<HTMLInputElement>(null);
 
   const [medias,      setMedias]      = useState<MediaPreview[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -32,6 +33,10 @@ export default function CreatePage() {
   const [submitting,  setSubmitting]  = useState(false);
   const [isDragging,  setIsDragging]  = useState(false);
 
+  // Aperçu pour les posts payants
+  const [previewMedia,   setPreviewMedia]   = useState<MediaPreview | null>(null);
+  const [previewUploading, setPreviewUploading] = useState(false);
+
   // Accord créateur
   const [agreementChecked,  setAgreementChecked]  = useState(false);
   const [agreementAccepted, setAgreementAccepted] = useState(false);
@@ -39,7 +44,6 @@ export default function CreatePage() {
   const [showRules,         setShowRules]         = useState(false);
   const canSetVisibility = user?.role === "CREATOR" || user?.role === "TRAINER";
 
-  // Vérifier si déjà accepté
   useEffect(() => {
     if (status !== "authenticated") return;
     fetch("/api/creator-agreement")
@@ -62,22 +66,16 @@ export default function CreatePage() {
         const canvas  = document.createElement("canvas");
         const MAX_DIM = 2048;
         let { width, height } = img;
-
-        // Redimensionner si trop grand
         if (width > MAX_DIM || height > MAX_DIM) {
           if (width > height) { height = Math.round(height * MAX_DIM / width); width = MAX_DIM; }
           else                { width  = Math.round(width  * MAX_DIM / height); height = MAX_DIM; }
         }
-
-        canvas.width  = width;
-        canvas.height = height;
+        canvas.width = width; canvas.height = height;
         const ctx = canvas.getContext("2d")!;
         ctx.drawImage(img, 0, 0, width, height);
-
         canvas.toBlob(
           (blob) => {
             if (!blob) { resolve(file); return; }
-            // Si toujours > 8MB, recompresser avec qualité réduite
             if (blob.size > 8 * 1024 * 1024) {
               canvas.toBlob(
                 (blob2) => resolve(blob2 ? new File([blob2], file.name, { type: "image/jpeg" }) : file),
@@ -95,51 +93,64 @@ export default function CreatePage() {
     });
   }
 
+  async function uploadToCloudinary(file: File): Promise<string> {
+    const cloudName    = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+    const isVideo      = file.type.startsWith("video/");
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", uploadPreset!);
+    formData.append("folder", "savage-club");
+
+    const res  = await fetch(
+      `https://api.cloudinary.com/v1_1/${cloudName}/${isVideo ? "video" : "image"}/upload`,
+      { method: "POST", body: formData }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || "Upload échoué");
+    return data.secure_url;
+  }
+
   async function uploadFile(file: File, index: number) {
     const maxSize = file.type.startsWith("video/") ? 100 * 1024 * 1024 : 10 * 1024 * 1024;
-
-    // Compresser les images trop lourdes
     let fileToUpload = file;
     if (file.type.startsWith("image/") && file.size > 8 * 1024 * 1024) {
-      setMedias((prev) => prev.map((m, i) =>
-        i === index ? { ...m, uploading: true, error: null } : m
-      ));
+      setMedias((prev) => prev.map((m, i) => i === index ? { ...m, uploading: true, error: null } : m));
       fileToUpload = await compressImage(file);
     }
-
     if (fileToUpload.size > maxSize) {
       const maxLabel = file.type.startsWith("video/") ? "100MB" : "10MB";
-      setMedias((prev) => prev.map((m, i) =>
-        i === index ? { ...m, error: `Fichier trop lourd (max ${maxLabel})`, uploading: false } : m
-      ));
+      setMedias((prev) => prev.map((m, i) => i === index ? { ...m, error: `Fichier trop lourd (max ${maxLabel})`, uploading: false } : m));
       return;
     }
-
     setMedias((prev) => prev.map((m, i) => i === index ? { ...m, uploading: true, error: null } : m));
     try {
-      const cloudName    = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-      const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-      const isVideo      = file.type.startsWith("video/");
-
-      const formData = new FormData();
-      formData.append("file", fileToUpload);
-      formData.append("upload_preset", uploadPreset!);
-      formData.append("folder", "savage-club");
-
-      const res  = await fetch(
-        `https://api.cloudinary.com/v1_1/${cloudName}/${isVideo ? "video" : "image"}/upload`,
-        { method: "POST", body: formData }
-      );
-      const data = await res.json();
-
-      if (!res.ok) throw new Error(data.error?.message || "Upload échoué");
-      setMedias((prev) => prev.map((m, i) =>
-        i === index ? { ...m, uploadedUrl: data.secure_url, uploading: false } : m
-      ));
+      const url = await uploadToCloudinary(fileToUpload);
+      setMedias((prev) => prev.map((m, i) => i === index ? { ...m, uploadedUrl: url, uploading: false } : m));
     } catch (err: any) {
-      setMedias((prev) => prev.map((m, i) =>
-        i === index ? { ...m, error: err.message, uploading: false } : m
-      ));
+      setMedias((prev) => prev.map((m, i) => i === index ? { ...m, error: err.message, uploading: false } : m));
+    }
+  }
+
+  async function uploadPreview(file: File) {
+    setPreviewUploading(true);
+    const preview: MediaPreview = {
+      file, localUrl: URL.createObjectURL(file),
+      type: getMediaType(file), uploadedUrl: null, uploading: true, error: null,
+    };
+    setPreviewMedia(preview);
+    try {
+      let fileToUpload = file;
+      if (file.type.startsWith("image/") && file.size > 8 * 1024 * 1024) {
+        fileToUpload = await compressImage(file);
+      }
+      const url = await uploadToCloudinary(fileToUpload);
+      setPreviewMedia((prev) => prev ? { ...prev, uploadedUrl: url, uploading: false } : null);
+    } catch (err: any) {
+      setPreviewMedia((prev) => prev ? { ...prev, error: err.message, uploading: false } : null);
+    } finally {
+      setPreviewUploading(false);
     }
   }
 
@@ -170,23 +181,25 @@ export default function CreatePage() {
   async function handleSubmit() {
     if (!session) return router.push("/auth");
     if (medias.some((m) => m.uploading)) return;
+    if (visibility === "PAID" && !previewMedia?.uploadedUrl) return;
 
-    // Enregistrer l'accord si première fois
     if (!agreementAccepted && agreementChecked) {
       await fetch("/api/creator-agreement", { method: "POST" });
       setAgreementAccepted(true);
     }
-    
+
     setSubmitting(true);
     try {
-      const res = await fetch("/api/post", {
+      const res = await fetch("/api/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           content,
-          visibility: canSetVisibility ? visibility : "PUBLIC",
-          price: visibility === "PAID" && canSetVisibility ? price : null,
-          medias: medias.map((m, i) => ({ url: m.uploadedUrl!, type: m.type, order: i })),
+          // Posts payants → forcés en SUBSCRIBERS
+          visibility: visibility === "PAID" ? "SUBSCRIBERS" : (canSetVisibility ? visibility : "PUBLIC"),
+          price:      visibility === "PAID" && canSetVisibility ? parseInt(price) : null,
+          previewUrl: visibility === "PAID" ? previewMedia?.uploadedUrl : null,
+          medias:     medias.map((m, i) => ({ url: m.uploadedUrl!, type: m.type, order: i })),
         }),
       });
       if (!res.ok) throw new Error("Erreur lors de la publication");
@@ -201,7 +214,8 @@ export default function CreatePage() {
   const allUploaded  = medias.every((m) => m.uploadedUrl && !m.uploading);
   const hasContent   = medias.length > 0 || content.trim().length > 0;
   const agreedToRules = agreementAccepted || agreementChecked;
-  const canSubmit    = hasContent && !submitting && (medias.length === 0 || allUploaded) && agreedToRules;
+  const previewReady = visibility !== "PAID" || (previewMedia?.uploadedUrl && !previewUploading);
+  const canSubmit    = hasContent && !submitting && (medias.length === 0 || allUploaded) && agreedToRules && previewReady;
   const isReel       = medias.length === 1 && medias[0].type === "VIDEO";
 
   return (
@@ -220,11 +234,8 @@ export default function CreatePage() {
             <h1 className="text-white font-bold text-base">
               {isReel ? "Nouveau réel" : "Nouveau post"}
             </h1>
-            <button
-              onClick={handleSubmit}
-              disabled={!canSubmit}
-              className="bg-amber-400 hover:bg-amber-300 disabled:opacity-30 disabled:cursor-not-allowed text-black font-bold text-sm px-4 py-1.5 rounded-full transition-all"
-            >
+            <button onClick={handleSubmit} disabled={!canSubmit}
+              className="bg-amber-400 hover:bg-amber-300 disabled:opacity-30 disabled:cursor-not-allowed text-black font-bold text-sm px-4 py-1.5 rounded-full transition-all">
               {submitting ? "Publication..." : "Publier"}
             </button>
           </div>
@@ -256,7 +267,6 @@ export default function CreatePage() {
                     {isReel ? "📱 Réel · Format 9:16" : medias.length > 1 ? `🖼 Carousel · ${medias.length} médias` : "🖼 Photo · Format natif"}
                   </span>
                 </div>
-
                 <div className={`relative overflow-hidden bg-black rounded-xl ${
                   isReel ? "aspect-[9/16]" : medias.length > 1 ? "aspect-square" : "aspect-[4/5]"
                 }`}>
@@ -270,8 +280,7 @@ export default function CreatePage() {
                         <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                        </svg>
-                        Upload...
+                        </svg>Upload...
                       </span>
                     )}
                     {medias[activeIndex]?.uploadedUrl && <span className="bg-green-500/80 text-white text-xs px-2 py-1 rounded-full">✓ Prêt</span>}
@@ -299,7 +308,6 @@ export default function CreatePage() {
                   )}
                 </div>
               </div>
-
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                 {medias.map((m, i) => (
                   <button key={i} onClick={() => setActiveIndex(i)}
@@ -328,11 +336,13 @@ export default function CreatePage() {
           <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple className="hidden"
             onChange={(e) => e.target.files && addFiles(e.target.files)}
           />
+          <input ref={previewInputRef} type="file" accept="image/*,video/*" className="hidden"
+            onChange={(e) => e.target.files?.[0] && uploadPreview(e.target.files[0])}
+          />
 
           {/* Formulaire */}
           <div className="space-y-3 mt-4">
-            <textarea
-              value={content} onChange={(e) => setContent(e.target.value)}
+            <textarea value={content} onChange={(e) => setContent(e.target.value)}
               placeholder="Écrivez une légende..." rows={3}
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/25 outline-none focus:border-amber-400/40 resize-none transition-colors"
             />
@@ -354,18 +364,85 @@ export default function CreatePage() {
                     </button>
                   ))}
                 </div>
+
                 {visibility === "PAID" && (
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 text-sm">FCFA</span>
-                    <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Prix d'accès" min="0"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-14 pr-4 py-3 text-white text-sm placeholder-white/25 outline-none focus:border-amber-400/40 transition-colors"
-                    />
+                  <div className="space-y-3">
+                    {/* Prix */}
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 text-sm">FCFA</span>
+                      <input type="number" value={price} onChange={(e) => setPrice(e.target.value)}
+                        placeholder="Prix d'accès" min="0"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-14 pr-4 py-3 text-white text-sm placeholder-white/25 outline-none focus:border-amber-400/40 transition-colors"
+                      />
+                    </div>
+
+                    {/* Upload aperçu */}
+                    <div className="bg-white/3 border border-amber-400/20 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-amber-400 text-sm font-semibold">Aperçu public</span>
+                        <span className="text-white/30 text-xs">(obligatoire)</span>
+                      </div>
+                      <p className="text-white/40 text-xs leading-relaxed">
+                        Uploadez un aperçu que verront les abonnés avant d'acheter. Ce fichier sera affiché avec un watermark — le contenu complet ne sera visible qu'après paiement.
+                      </p>
+
+                      {!previewMedia ? (
+                        <button onClick={() => previewInputRef.current?.click()}
+                          className="w-full border-2 border-dashed border-amber-400/30 hover:border-amber-400/60 rounded-xl py-6 flex flex-col items-center gap-2 transition-colors">
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-amber-400/60">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                          </svg>
+                          <p className="text-amber-400/60 text-xs">Choisir un aperçu</p>
+                        </button>
+                      ) : (
+                        <div className="relative rounded-xl overflow-hidden aspect-[4/3]">
+                          {previewMedia.type === "VIDEO"
+                            ? <video src={previewMedia.localUrl} className="w-full h-full object-cover" muted playsInline autoPlay loop/>
+                            : <img src={previewMedia.localUrl} alt="" className="w-full h-full object-cover"/>
+                          }
+                          {/* Simuler le watermark */}
+                          <div className="absolute inset-0 pointer-events-none">
+                            {Array.from({ length: 3 }).map((_, i) => (
+                              <span key={i} className="absolute text-white text-[10px] font-medium select-none"
+                                style={{ top: `${20 + i * 30}%`, left: `${10 + i * 20}%`, opacity: 0.2, transform: "rotate(-15deg)", whiteSpace: "nowrap" }}>
+                                @username • watermark
+                              </span>
+                            ))}
+                          </div>
+                          <div className="absolute top-2 left-2 flex gap-1.5">
+                            {previewMedia.uploading && (
+                              <span className="bg-black/60 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                                <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                                </svg>Upload...
+                              </span>
+                            )}
+                            {previewMedia.uploadedUrl && <span className="bg-green-500/80 text-white text-xs px-2 py-1 rounded-full">✓ Aperçu prêt</span>}
+                          </div>
+                          <button onClick={() => setPreviewMedia(null)}
+                            className="absolute bottom-2 right-2 bg-black/60 hover:bg-red-500/80 text-white w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Info */}
+                    <div className="bg-amber-400/10 border border-amber-400/20 rounded-xl px-4 py-3 flex items-start gap-2">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-400 flex-shrink-0 mt-0.5">
+                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                      </svg>
+                      <p className="text-amber-400/80 text-xs leading-relaxed">
+                        Ce post sera visible uniquement par vos abonnés. Le contenu complet sera déverrouillé après paiement de <strong className="text-amber-400">{price ? parseInt(price).toLocaleString("fr-FR") : "---"} FCFA</strong>.
+                      </p>
+                    </div>
                   </div>
                 )}
               </>
             )}
 
-            {isReel && (
+            {isReel && visibility !== "PAID" && (
               <div className="bg-amber-400/10 border border-amber-400/20 rounded-xl px-4 py-3 flex items-start gap-2">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-400 flex-shrink-0 mt-0.5">
                   <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -376,15 +453,14 @@ export default function CreatePage() {
               </div>
             )}
 
-            {/* ── Accord créateur ── */}
+            {/* Accord créateur */}
             {!agreementLoading && (
               agreementAccepted ? (
                 <p className="text-white/20 text-xs text-center py-1">✓ Règles des créateurs acceptées</p>
               ) : (
                 <div className="bg-white/3 border border-white/10 rounded-xl p-4 space-y-3">
                   <div className="flex items-start gap-3">
-                    <button
-                      onClick={() => setAgreementChecked((v) => !v)}
+                    <button onClick={() => setAgreementChecked((v) => !v)}
                       className={`w-5 h-5 rounded flex-shrink-0 mt-0.5 border-2 flex items-center justify-center transition-all ${
                         agreementChecked ? "bg-amber-400 border-amber-400" : "border-white/20 hover:border-white/40"
                       }`}
@@ -397,15 +473,11 @@ export default function CreatePage() {
                     </button>
                     <p className="text-white/60 text-xs leading-relaxed">
                       J'ai lu et j'accepte les{" "}
-                      <a
-                        href="/rules"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-amber-400 hover:text-amber-300 underline underline-offset-2 transition-colors"
-                      >
+                      <a href="/rules" target="_blank" rel="noopener noreferrer"
+                        className="text-amber-400 hover:text-amber-300 underline underline-offset-2 transition-colors">
                         règles des créateurs
-                      </a>
-                      {" "}de Savage Club. Je m'engage à publier du contenu conforme à ces règles.
+                      </a>{" "}
+                      de Savage Club.
                     </p>
                   </div>
                 </div>

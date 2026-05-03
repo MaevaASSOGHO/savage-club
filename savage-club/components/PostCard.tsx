@@ -26,6 +26,8 @@ type Media = {
 type Post = {
   id: string;
   content: string;
+  price?: number | null;
+  previewUrl?: string | null;
   medias: Media[];
   user: {
     id: string;
@@ -340,6 +342,8 @@ export default function PostCard({ post }: { post: Post }) {
   const visibleComments = showAll ? comments : comments.slice(-2);
 
   const isReel     = post.medias.length === 1 && post.medias[0]?.type === "VIDEO";
+  const isPaid     = !!(post.price && post.price > 0);
+  const [showPreview, setShowPreview] = useState(false);
   const isCarousel = post.medias.length > 1;
   const current    = post.medias[mediaIndex];
 
@@ -384,24 +388,57 @@ export default function PostCard({ post }: { post: Post }) {
       {post.medias.length > 0 && current && (
         <Link href={`/post/${post.id}`}>
           <div className="relative overflow-hidden bg-black rounded-sm shadow-[0_20px_50px_rgba(0,0,0,0.5)] aspect-[4/5] max-w-[420px]">
-            {current.type === "VIDEO" ? (
-              <video
-                key={current.url}
-                src={current.url}
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-              />
+            {/* Post payant → afficher l'aperçu avec overlay */}
+            {isPaid && post.previewUrl ? (
+              <>
+                {post.previewUrl.includes("/video/") || post.previewUrl.match(/\.(mp4|mov|webm)/) ? (
+                  <video src={post.previewUrl} playsInline muted className="w-full h-full object-cover"/>
+                ) : (
+                  <img src={post.previewUrl} alt="" className="w-full h-full object-cover"/>
+                )}
+                <MediaWatermark postId={post.id}/>
+                {/* Overlay payant */}
+                <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3 z-20">
+                  <div className="bg-black/60 rounded-2xl px-5 py-4 flex flex-col items-center gap-3 border border-white/10">
+                    <div className="flex items-center gap-2">
+                      <span className="text-amber-400 text-lg">💰</span>
+                      <span className="text-white font-bold text-sm">{post.price?.toLocaleString("fr-FR")} FCFA</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={(e) => { e.preventDefault(); setShowPreview(true); }}
+                        className="bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-all flex items-center gap-1.5"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                        </svg>
+                        Aperçu
+                      </button>
+                      <button
+                        onClick={(e) => { e.preventDefault(); window.location.href = `/post/${post.id}`; }}
+                        className="bg-amber-400 hover:bg-amber-300 text-black text-xs font-bold px-3 py-2 rounded-xl transition-all flex items-center gap-1.5"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                        </svg>
+                        Déverrouiller
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
             ) : (
-              <img
-                src={current.url}
-                alt={post.content}
-                className="w-full h-full object-cover"
-              />
+              <>
+                {current.type === "VIDEO" ? (
+                  <video key={current.url} src={current.url} playsInline muted className="w-full h-full object-cover"/>
+                ) : (
+                  <img src={current.url} alt={post.content} className="w-full h-full object-cover"/>
+                )}
+                <MediaWatermark postId={post.id}/>
+              </>
             )}
-            <MediaWatermark postId={post.id} />
-            {/* Badge Réel */}
-            {isReel && (
+            {/* Badge Réel — seulement si non payant */}
+            {!isPaid && isReel && (
               <div className="absolute top-3 left-3 bg-black/50 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <rect x="2" y="2" width="20" height="20" rx="2"/>
@@ -544,16 +581,14 @@ export default function PostCard({ post }: { post: Post }) {
             {visibleComments.map((c) => (
               <div key={c.id} className="flex items-start gap-2">
                 <div className="w-6 h-6 rounded-full bg-white/20 overflow-hidden flex-shrink-0 mt-0.5">
-                  {c.user?.avatar
+                  {c.user.avatar
                     ? <img src={c.user.avatar} className="w-full h-full object-cover"/>
-                    : <div className="w-full h-full bg-purple-500 flex items-center justify-center text-[10px] text-white font-bold">
-                        {c.user?.username?.[0]?.toUpperCase() ?? "?"}
-                      </div>
+                    : <div className="w-full h-full bg-purple-500 flex items-center justify-center text-[10px] text-white font-bold">{c.user.username[0].toUpperCase()}</div>
                   }
                 </div>
                 <p className="text-xs leading-relaxed">
-                  <Link href={`/profil/${c.user?.username ?? ""}`} className="text-white font-semibold hover:text-amber-400 transition-colors mr-1.5">
-                    {c.user?.username ?? "Utilisateur"}
+                  <Link href={`/profil/${c.user.username}`} className="text-white font-semibold hover:text-amber-400 transition-colors mr-1.5">
+                    {c.user.username}
                   </Link>
                   <span className="text-white/70">{c.text}</span>
                 </p>
@@ -585,6 +620,36 @@ export default function PostCard({ post }: { post: Post }) {
       )}
 
       {shared && <p className="text-green-400 text-xs px-1 mt-1">✓ Lien copié !</p>}
+
+      {/* Modale aperçu */}
+      {showPreview && post.previewUrl && (
+        <>
+          <div className="fixed inset-0 bg-black/90 z-[100]" onClick={() => setShowPreview(false)}/>
+          <div className="fixed inset-0 z-[101] flex items-center justify-center p-4">
+            <div className="relative max-w-sm w-full bg-[#1E0A3C] rounded-2xl overflow-hidden border border-white/10">
+              <div className="relative aspect-[4/5]">
+                {post.previewUrl.match(/\.(mp4|mov|webm)/) || post.previewUrl.includes("/video/") ? (
+                  <video src={post.previewUrl} controls className="w-full h-full object-cover"/>
+                ) : (
+                  <img src={post.previewUrl} alt="" className="w-full h-full object-cover" draggable={false} onContextMenu={(e) => e.preventDefault()}/>
+                )}
+                <MediaWatermark postId={post.id}/>
+              </div>
+              <div className="p-4 space-y-3">
+                <p className="text-white font-bold text-center">Aperçu — {post.price?.toLocaleString("fr-FR")} FCFA pour le contenu complet</p>
+                <a href={`/post/${post.id}`}
+                  className="w-full bg-amber-400 hover:bg-amber-300 text-black font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 text-sm">
+                  🔓 Déverrouiller le contenu
+                </a>
+                <button onClick={() => setShowPreview(false)}
+                  className="w-full text-white/40 hover:text-white text-sm transition-colors py-1">
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

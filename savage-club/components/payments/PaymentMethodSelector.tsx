@@ -28,6 +28,7 @@ type Props = {
     bookingData?:    Record<string, any>;
     messageId?:      string;
     conversationId?: string;
+    postId?:         string;
   };
 };
 
@@ -123,6 +124,7 @@ export default function PaymentMethodSelector({
         bookingData:    stripePayload.bookingData,
         messageId:      stripePayload.messageId,
         conversationId: stripePayload.conversationId,
+        postId:         stripePayload.postId,
       }),
     });
     const data = await res.json();

@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
 
   const {
     amount, type, recipientId, description,
-    tier, bookingData, messageId, conversationId,
+    tier, bookingData, messageId, conversationId, postId,
   } = await req.json();
 
   const user = await prisma.user.findUnique({
@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
   if (messageId)      metadata.messageId      = messageId;
   if (conversationId) metadata.conversationId = conversationId;
   if (bookingData)    metadata.bookingData    = JSON.stringify(bookingData);
+  if (postId)         metadata.postId         = postId;
 
   // Créer le PaymentIntent Stripe en EUR
   const { clientSecret, paymentIntentId } = await stripe.createPaymentIntent(

@@ -6,7 +6,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ProtectedMedia from "@/components/ProtectedMedia";
 import MediaWatermark from "@/components/MediaWatermark";
-import ReportButton from "@/components/ReportButton"; // Ajout de l'import
+import ReportButton from "@/components/ReportButton";
+import PaymentMethodSelector from "@/components/payments/PaymentMethodSelector";
 
 type Media = { id: string; url: string; type: string; order: number };
 type CommentUser = {
@@ -24,6 +25,8 @@ type PostUser = {
 type Post = {
   id: string; content: string; createdAt: string;
   visibility: string;
+  price?: number | null;
+  previewUrl?: string | null;
   medias: Media[];
   user: PostUser;
   likes: { id: string; userId: string }[];
@@ -35,6 +38,7 @@ type Props = {
   viewerLiked: boolean;
   viewerSaved: boolean;
   viewerId: string | null;
+  postUnlocked: boolean;
 };
 
 function timeAgo(date: string) {
@@ -60,6 +64,7 @@ function VerifiedBadge({ size = 14 }: { size?: number }) {
 function MediaPanel({ medias, postId }: { medias: Media[]; postId?: string }) {
   const [idx, setIdx] = useState(0);
   const current = medias[idx];
+  
   if (!current) return null;
 
   const isReel = medias.length === 1 && current.type === "VIDEO";
@@ -144,7 +149,7 @@ function MediaPanel({ medias, postId }: { medias: Media[]; postId?: string }) {
 }
 
 // ── Composant principal ───────────────────────────────────────────────────
-export default function PostDetail({ post, viewerLiked, viewerSaved, viewerId }: Props) {
+export default function PostDetail({ post, viewerLiked, viewerSaved, viewerId, postUnlocked }: Props) {
   const router = useRouter();
   const commentsEndRef = useRef<HTMLDivElement>(null);
   const [showOptions, setShowOptions] = useState(false); // État pour le menu des options
@@ -208,8 +213,12 @@ export default function PostDetail({ post, viewerLiked, viewerSaved, viewerId }:
     setSubmitting(false);
   }
 
-  const isReel = post.medias.length === 1 && post.medias[0]?.type === "VIDEO";
-  const isOwner = viewerId === post.user.id; // Vérifier si l'utilisateur est le propriétaire
+  const isReel  = post.medias.length === 1 && post.medias[0]?.type === "VIDEO";
+  const isOwner = viewerId === post.user.id;
+  const isPaid  = !!(post.price && post.price > 0);
+  // Déverrouillé si: pas payant, ou propriétaire, ou paiement confirmé
+  const [unlocked, setUnlocked] = useState(!isPaid || isOwner || postUnlocked);
+  const [showPayment,  setShowPayment]  = useState(false);
 
   return (
     <>
@@ -217,8 +226,47 @@ export default function PostDetail({ post, viewerLiked, viewerSaved, viewerId }:
       <div className="hidden md:flex w-full max-w-5xl mx-auto min-h-[80vh] max-h-[90vh] rounded-2xl overflow-hidden shadow-2xl border border-white/8">
 
         {/* Colonne gauche — média */}
-        <div className={`flex-shrink-0 bg-black flex items-center justify-center ${isReel ? "w-[380px]" : "w-[520px]"}`}>
-          <MediaPanel medias={post.medias} postId={post.id} />
+        <div className={`flex-shrink-0 bg-black flex items-center justify-center relative ${isReel ? "w-[380px]" : "w-[520px]"}`}>
+          {unlocked ? (
+            <MediaPanel medias={post.medias} postId={post.id} />
+          ) : post.previewUrl ? (
+            <div className="relative w-full h-full flex items-center justify-center">
+              {post.previewUrl.includes("/video/") ? (
+                <video src={post.previewUrl} controls playsInline className="w-full h-full object-contain"/>
+              ) : (
+                <img src={post.previewUrl} alt="" className="w-full h-full object-contain" draggable={false} onContextMenu={(e) => e.preventDefault()}/>
+              )}
+              <MediaWatermark postId={post.id}/>
+              {/* Overlay paiement */}
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center">
+                <div className="bg-[#1E0A3C] border border-white/10 rounded-2xl p-6 flex flex-col items-center gap-4 max-w-xs">
+                  <div className="w-14 h-14 rounded-full bg-amber-400/20 flex items-center justify-center">
+                    <span className="text-3xl">🔒</span>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-white font-bold">Contenu payant</p>
+                    <p className="text-white/40 text-sm mt-1">{post.price?.toLocaleString("fr-FR")} FCFA pour accéder au contenu complet</p>
+                  </div>
+                  <button onClick={() => setShowPayment(true)}
+                    className="w-full bg-amber-400 hover:bg-amber-300 text-black font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                    </svg>
+                    Déverrouiller
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-3 text-white/40">
+              <span className="text-4xl">🔒</span>
+              <p className="text-sm">Contenu payant</p>
+              <button onClick={() => setShowPayment(true)}
+                className="bg-amber-400 hover:bg-amber-300 text-black font-bold px-6 py-2.5 rounded-xl text-sm transition-all">
+                Payer {post.price?.toLocaleString("fr-FR")} FCFA
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Colonne droite — infos + commentaires */}
@@ -524,8 +572,36 @@ export default function PostDetail({ post, viewerLiked, viewerSaved, viewerId }:
         </div>
 
         {/* Média plein écran */}
-        <div className="flex-shrink-0">
-          <MediaPanel medias={post.medias} postId={post.id} />
+        <div className="flex-shrink-0 relative">
+          {unlocked ? (
+            <MediaPanel medias={post.medias} postId={post.id} />
+          ) : post.previewUrl ? (
+            <div className="relative aspect-[4/5]">
+              {post.previewUrl.includes("/video/") ? (
+                <video src={post.previewUrl} playsInline muted className="w-full h-full object-cover"/>
+              ) : (
+                <img src={post.previewUrl} alt="" className="w-full h-full object-cover" draggable={false} onContextMenu={(e) => e.preventDefault()}/>
+              )}
+              <MediaWatermark postId={post.id}/>
+              <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                <div className="bg-[#1E0A3C] border border-white/10 rounded-2xl p-5 flex flex-col items-center gap-3 mx-4">
+                  <span className="text-3xl">🔒</span>
+                  <p className="text-white font-bold text-sm text-center">{post.price?.toLocaleString("fr-FR")} FCFA</p>
+                  <button onClick={() => setShowPayment(true)}
+                    className="bg-amber-400 hover:bg-amber-300 text-black font-bold px-6 py-2.5 rounded-xl text-sm transition-all">
+                    Déverrouiller
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="aspect-[4/5] flex items-center justify-center bg-black">
+              <button onClick={() => setShowPayment(true)}
+                className="bg-amber-400 text-black font-bold px-6 py-3 rounded-xl text-sm">
+                Payer {post.price?.toLocaleString("fr-FR")} FCFA
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Actions mobile */}
@@ -643,6 +719,27 @@ export default function PostDetail({ post, viewerLiked, viewerSaved, viewerId }:
           )}
         </div>
       </div>
+      {/* Sélecteur de paiement */}
+      {showPayment && isPaid && !unlocked && (
+        <PaymentMethodSelector
+          amount={post.price!}
+          label={`Déverrouiller le post — ${post.price?.toLocaleString("fr-FR")} FCFA`}
+          onClose={() => setShowPayment(false)}
+          mfPayload={{
+            type:        "CUSTOM_CONTENT",
+            recipientId: post.user.id,
+            route:       "subscription",
+            returnTo:    `/post/${post.id}`,
+            extra: { postId: post.id },
+          }}
+          stripePayload={{
+            type:        "CUSTOM_CONTENT",
+            recipientId: post.user.id,
+            description: `Post payant — ${post.user.displayName ?? post.user.username}`,
+            returnTo:    `/post/${post.id}`,
+          }}
+        />
+      )}
     </>
   );
 }

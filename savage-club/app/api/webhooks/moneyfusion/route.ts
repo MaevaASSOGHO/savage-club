@@ -114,6 +114,21 @@ export async function POST(req: NextRequest) {
           });
           break;
         }
+
+        case "CUSTOM_CONTENT": {
+          if (!info?.postId) break;
+          await prisma.postPurchase.upsert({
+            where:  { userId_postId: { userId: payment.payerId, postId: info.postId } },
+            update: {},
+            create: {
+              id:        crypto.randomUUID(),
+              userId:    payment.payerId,
+              postId:    info.postId,
+              paymentId: payment.id,
+            },
+          });
+          break;
+        }
       }
 
       console.log("[MF Webhook] Paiement confirmé:", payment.id, info?.type);

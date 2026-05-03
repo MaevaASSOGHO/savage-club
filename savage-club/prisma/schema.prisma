@@ -217,6 +217,7 @@ model Post {
   currency     String?
   isLocked     Boolean        @default(false)
   price        Int?
+  previewUrl   String?
   status       PostStatus     @default(PUBLISHED)
   visibility   PostVisibility @default(PUBLIC)
   Comment      Comment[]
@@ -224,6 +225,7 @@ model Post {
   Notification Notification[]
   User         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   PostMedia    PostMedia[]
+  PostPurchase PostPurchase[]
   Reaction     Reaction[]
   Report       Report[]
   SavedPost    SavedPost[]
@@ -237,6 +239,20 @@ model PostMedia {
   postId    String
   createdAt DateTime  @default(now())
   Post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+}
+
+model PostPurchase {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId    String
+  postId    String
+  paymentId String?
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([userId])
+  @@index([postId])
 }
 
 model Reaction {
@@ -357,6 +373,7 @@ model User {
   Payment_Payment_payerIdToUser                Payment[]                 @relation("Payment_payerIdToUser")
   Payment_Payment_recipientIdToUser            Payment[]                 @relation("Payment_recipientIdToUser")
   Post                                         Post[]
+  PostPurchase                                 PostPurchase[]
   Reaction                                     Reaction[]
   Reel                                         Reel[]
   Report_Report_reportedUserIdToUser           Report[]                  @relation("Report_reportedUserIdToUser")
@@ -449,7 +466,6 @@ enum MessageType {
   TEXT
   IMAGE
   VIDEO
-  DOCUMENT
 }
 
 enum NotificationType {
