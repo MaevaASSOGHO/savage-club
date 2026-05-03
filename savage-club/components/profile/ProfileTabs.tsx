@@ -7,14 +7,15 @@ import Link from "next/link";
 type Media = { id: string; url: string; type: string; order: number };
 
 type Post = {
-  id:         string;
-  content:    string;
-  medias:     Media[];
-  visibility: string;
-  price?:     number | null;
+  id:          string;
+  content:     string;
+  medias:      Media[];
+  visibility:  string;
+  price?:      number | null;
   previewUrl?: string | null;
-  likes:      { id: string }[];
-  comments:   { id: string }[];
+  likes:       { id: string }[];
+  comments:    { id: string }[];
+  locked?:     boolean;
 };
 
 type Props = {
@@ -86,10 +87,10 @@ function PostGrid({
         const hasMultiple  = post.medias.length > 1;
         const isSubscriberOnly = post.visibility === "SUBSCRIBERS";
         const isPaid       = !!(post.price && post.price > 0);
-        const isLocked     = !isOwner && isSubscriberOnly && !isSubscriber;
+        const isLocked     = post.locked || (!isOwner && isSubscriberOnly && !isSubscriber);
         const mediaToShow  = isPaid && post.previewUrl
           ? { url: post.previewUrl, type: post.previewUrl.includes("/video/") ? "VIDEO" : "IMAGE" }
-          : firstMedia;
+          : (isLocked ? null : firstMedia);
 
         return (
           <Link
@@ -97,20 +98,25 @@ function PostGrid({
             href={`/post/${post.id}`}
             className="relative aspect-square bg-white/5 overflow-hidden group"
           >
-            {mediaToShow ? (
+            {isLocked ? (
+              /* Placeholder flouté pour les posts abonnés verrouillés */
+              <div className="w-full h-full bg-gradient-to-br from-purple-900/60 to-purple-800/40 flex items-center justify-center">
+                <div className="w-full h-full absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSJyZ2JhKDEwMCw2MCwxNTAsMC4xKSIvPjwvc3ZnPg==')] opacity-30"/>
+              </div>
+            ) : mediaToShow ? (
               mediaToShow.type === "VIDEO" ? (
                 <video
                   src={mediaToShow.url}
-                  className={`w-full h-full object-cover ${isLocked ? "blur-md" : ""}`}
+                  className="w-full h-full object-cover"
                   muted playsInline preload="metadata"
-                  onMouseEnter={(e) => { if (!isLocked) (e.currentTarget as HTMLVideoElement).play().catch(() => {}); }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLVideoElement).play().catch(() => {}); }}
                   onMouseLeave={(e) => { const v = e.currentTarget as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
                 />
               ) : (
                 <img
                   src={mediaToShow.url}
                   alt={post.content}
-                  className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${isLocked ? "blur-md" : ""}`}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
               )
             ) : (

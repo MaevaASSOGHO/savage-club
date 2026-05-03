@@ -1,7 +1,7 @@
 // app/api/profil/[username]/posts/route.ts
 import { getServerSession, authOptions } from "@/lib/auth-compat";
-import { prisma }       from "@/lib/prisma";
-import { NextRequest, NextResponse } from "next/server";
+import { prisma }                        from "@/lib/prisma";
+import { NextRequest, NextResponse }     from "next/server";
 
 const LIMIT = 12;
 
@@ -16,7 +16,6 @@ export async function GET(
 
   const session = await getServerSession(authOptions);
 
-  // Récupérer le profil
   const profileUser = await prisma.user.findUnique({
     where:  { username },
     select: { id: true, email: true },
@@ -41,28 +40,16 @@ export async function GET(
     }
   }
 
-  // Filtres selon l'onglet
-  const visibilityFilter = isOwner
-    ? {}
-    : isSubscriber
-    ? { visibility: { in: ["PUBLIC", "SUBSCRIBERS"] as any } }
-    : { visibility: "PUBLIC" as any };
-
+  // Filtre selon l'onglet — pas de filtre visibility, on retourne tout
   let where: any = {
     userId: profileUser.id,
     status: "PUBLISHED",
   };
 
-  if (tab === "posts") {
-    where = { ...where, ...visibilityFilter };
-  } else if (tab === "reels") {
-    where = {
-      ...where,
-      ...visibilityFilter,
-      PostMedia: { some: { type: "VIDEO" } },
-    };
+  if (tab === "reels") {
+    where.PostMedia = { some: { type: "VIDEO" } };
   } else if (tab === "shop") {
-    where = { ...where, price: { gt: 0 } };
+    where.price = { gt: 0 };
   }
 
   const posts = await prisma.post.findMany({
@@ -82,16 +69,24 @@ export async function GET(
   const nextCursor = hasMore ? items[items.length - 1].id : null;
 
   return NextResponse.json({
-    posts: items.map((p) => ({
-      id:         p.id,
-      content:    p.content ?? "",
-      visibility: p.visibility,
-      price:      p.price,
-      previewUrl: p.previewUrl,
-      medias:     p.PostMedia,
-      likes:      p.Like,
-      comments:   p.Comment,
-    })),
+    posts: items.map((p) => {
+      // Masquer les URLs pour les posts abonnés si non abonné
+      const isLocked = !isOwner && p.visibility === "SUBSCRIBERS" && !isSubscriber;
+      return {
+        id:         p.id,
+        content:    p.content ?? "",
+        visibility: p.visibility,
+        price:      p.price,
+        previewUrl: p.previewUrl,
+        // Si verrouillé → pas d'URL réelle exposée
+        medias:     isLocked
+          ? [{ id: "locked", url: "", type: "IMAGE", order: 0 }]
+          : p.PostMedia,
+        likes:      p.Like,
+        comments:   p.Comment,
+        locked:     isLocked,
+      };
+    }),
     nextCursor,
     hasMore,
   });
