@@ -180,6 +180,27 @@ export default function MessageBubble({
                 </div>
               )}
 
+              {/* Document */}
+              {msg.mediaUrl && msg.mediaType === "DOCUMENT" && (
+                <a
+                  href={msg.mediaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 px-4 py-3 bg-white/8 border border-white/10 rounded-2xl hover:bg-white/12 transition-all max-w-xs"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-amber-400/20 flex items-center justify-center flex-shrink-0">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="1.8">
+                      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-white text-xs font-medium truncate">{msg.content || "Document"}</p>
+                    <p className="text-white/30 text-[10px] mt-0.5">Appuyer pour ouvrir</p>
+                  </div>
+                </a>
+              )}
+              
               {/* Texte */}
               {msg.content && (
                 <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${

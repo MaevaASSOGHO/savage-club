@@ -449,6 +449,7 @@ enum MessageType {
   TEXT
   IMAGE
   VIDEO
+  DOCUMENT
 }
 
 enum NotificationType {
@@ -551,7 +552,6 @@ enum WithdrawalMethod {
   MTN_MOMO
   STRIPE
   BANK_TRANSFER
-  MOBILE_MONEY
 }
 
 enum WithdrawalStatus {
