@@ -16,6 +16,8 @@ type Post = {
   content: string;
   medias: Media[];
   visibility: string;
+  price?: number | null;
+  previewUrl?: string | null;
   likes: { id: string }[];
   comments: { id: string }[];
   user: {
@@ -29,6 +31,7 @@ type Post = {
 type Props = {
   posts: Post[];
   isOwner: boolean;
+  viewerTier?: "NONE" | "FREE" | "SAVAGE" | "VIP";
 };
 
 type Tab = "posts" | "reels" | "saved" | "shop";
@@ -72,7 +75,7 @@ const TABS: { key: Tab; icon: React.ReactNode }[] = [
 ];
 
 // ── Grille générique réutilisable ──────────────────────────────────────────
-function PostGrid({ posts, emptyLabel }: { posts: Post[]; emptyLabel: string }) {
+function PostGrid({ posts, emptyLabel, isOwner, isSubscriber }: { posts: Post[]; emptyLabel: string; isOwner: boolean; isSubscriber: boolean }) {
   if (posts.length === 0) {
     return (
       <p className="col-span-3 text-center text-white/25 text-sm py-10">{emptyLabel}</p>
@@ -83,77 +86,90 @@ function PostGrid({ posts, emptyLabel }: { posts: Post[]; emptyLabel: string }) 
       {posts.map((post) => {
         const firstMedia = post.medias[0];
         const hasMultiple = post.medias.length > 1;
+        const isSubscriberOnly = post.visibility === "SUBSCRIBERS";
+        const isPaid           = !!(post.price && post.price > 0);
+        const isLocked         = !isOwner && isSubscriberOnly && !isSubscriber;
+        const mediaToShow      = isPaid && post.previewUrl
+          ? { url: post.previewUrl, type: post.previewUrl.includes("/video/") ? "VIDEO" : "IMAGE" }
+          : firstMedia;
+
         return (
           <Link
-            key={post.id}
-            href={`/post/${post.id}`}
-            className="relative aspect-square bg-white/5 overflow-hidden group"
-          >
-            {firstMedia ? (
-              firstMedia.type === "VIDEO" ? (
-                <video
-                  src={firstMedia.url}
-                  className="w-full h-full object-cover"
-                  muted playsInline preload="metadata"
-                  onMouseEnter={(e) => {
-                    const v = e.currentTarget as HTMLVideoElement;
-                    v.play().catch(() => {});  // ← ignorer l'AbortError
-                  }}
-                  onMouseLeave={(e) => {
-                    const v = e.currentTarget as HTMLVideoElement;
-                    v.pause();
-                    v.currentTime = 0;
-                  }}
-                />
-              ) : (
-                <img
-                  src={firstMedia.url}
-                  alt={post.content}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-              )
-            ) : (
-              <div className="w-full h-full flex items-center justify-center p-3">
-                <p className="text-white/40 text-xs text-center line-clamp-4">{post.content}</p>
-              </div>
-            )}
+                key={post.id}
+                href={`/post/${post.id}`}
+                className="relative aspect-square bg-white/5 overflow-hidden group"
+              >
+                {mediaToShow ? (
+                  mediaToShow.type === "VIDEO" ? (
+                    <video
+                      src={mediaToShow.url}
+                      className={`w-full h-full object-cover ${isLocked ? "blur-md" : ""}`}
+                      muted playsInline preload="metadata"
+                      onMouseEnter={(e) => { if (!isLocked) (e.currentTarget as HTMLVideoElement).play().catch(() => {}); }}
+                      onMouseLeave={(e) => { const v = e.currentTarget as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
+                    />
+                  ) : (
+                    <img
+                      src={mediaToShow.url}
+                      alt={post.content}
+                      className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${isLocked ? "blur-md" : ""}`}
+                    />
+                  )
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center p-3">
+                    <p className="text-white/40 text-xs text-center line-clamp-4">{post.content}</p>
+                  </div>
+                )}
 
-            {/* Overlay hover */}
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-              <span className="text-white text-xs font-bold">🔥 {post.likes.length}</span>
-              <span className="text-white text-xs font-bold">💬 {post.comments.length}</span>
-            </div>
+                {/* Overlay abonnés */}
+                {isLocked && (
+                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-1.5">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                    </svg>
+                    <p className="text-white text-[10px] font-bold text-center px-2">Abonnés uniquement</p>
+                  </div>
+                )}
 
-            {/* Icône carousel */}
-            {hasMultiple && (
-              <div className="absolute top-2 right-2">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="white" opacity="0.9">
-                  <rect x="7" y="3" width="14" height="14" rx="2"/>
-                  <path d="M3 7v11a2 2 0 002 2h11" stroke="white" strokeWidth="2" fill="none"/>
-                </svg>
-              </div>
-            )}
+                {/* Overlay payant */}
+                {isPaid && !isOwner && (
+                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-1.5">
+                    <div className="bg-amber-400 rounded-full w-7 h-7 flex items-center justify-center">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="black">
+                        <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                      </svg>
+                    </div>
+                    <p className="text-amber-400 text-[10px] font-bold">{post.price?.toLocaleString("fr-FR")} FCFA</p>
+                    <p className="text-white/60 text-[9px]">Appuyer pour déverrouiller</p>
+                  </div>
+                )}
 
-            {/* Icône vidéo seule */}
-            {!hasMultiple && firstMedia?.type === "VIDEO" && (
-              <div className="absolute top-2 right-2">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-                  <polygon points="23 7 16 12 23 17 23 7"/>
-                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-                </svg>
-              </div>
-            )}
+                {/* Overlay hover normal */}
+                {!isLocked && !isPaid && (
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                    <span className="text-white text-xs font-bold">🔥 {post.likes.length}</span>
+                    <span className="text-white text-xs font-bold">💬 {post.comments.length}</span>
+                  </div>
+                )}
 
-            {/* Cadenas payant */}
-            {post.visibility === "PAID" && (
-              <div className="absolute top-2 left-2 bg-amber-400 rounded-full w-5 h-5 flex items-center justify-center">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="black">
-                  <rect x="3" y="11" width="18" height="11" rx="2"/>
-                  <path d="M7 11V7a5 5 0 0110 0v4"/>
-                </svg>
-              </div>
-            )}
-          </Link>
+                {/* Icônes */}
+                {hasMultiple && !isLocked && !isPaid && (
+                  <div className="absolute top-2 right-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="white" opacity="0.9">
+                      <rect x="7" y="3" width="14" height="14" rx="2"/>
+                      <path d="M3 7v11a2 2 0 002 2h11" stroke="white" strokeWidth="2" fill="none"/>
+                    </svg>
+                  </div>
+                )}
+                {!hasMultiple && firstMedia?.type === "VIDEO" && !isLocked && !isPaid && (
+                  <div className="absolute top-2 right-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+                      <polygon points="23 7 16 12 23 17 23 7"/>
+                      <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                  </div>
+                )}
+              </Link>
         );
       })}
     </>
@@ -161,7 +177,7 @@ function PostGrid({ posts, emptyLabel }: { posts: Post[]; emptyLabel: string }) 
 }
 
 // ── Composant principal ────────────────────────────────────────────────────
-export default function ProfileTabs({ posts, isOwner }: Props) {
+export default function ProfileTabs({ posts, isOwner, viewerTier = "NONE" }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("posts");
 
   // Posts sauvegardés — chargés à la demande
@@ -184,9 +200,8 @@ export default function ProfileTabs({ posts, isOwner }: Props) {
   }, [activeTab, isOwner, savedLoaded]);
 
   // Filtres
-  const gridPosts = posts.filter(
-    (p) => isOwner || p.visibility === "PUBLIC" || p.visibility === "SUBSCRIBERS"
-  );
+  const isSubscriber = viewerTier === "SAVAGE" || viewerTier === "VIP";
+  const gridPosts    = posts; // Tous les posts visibles, overlay gère l'accès
   const reelPosts = posts.filter(
     (p) =>
       (isOwner || p.visibility !== "PAID") &&
@@ -230,7 +245,7 @@ export default function ProfileTabs({ posts, isOwner }: Props) {
       {/* ── Grille Posts ── */}
       {activeTab === "posts" && (
         <div className="grid grid-cols-3 gap-0.5">
-          <PostGrid posts={gridPosts} emptyLabel="Aucune publication." />
+          <PostGrid posts={gridPosts} emptyLabel="Aucune publication." isOwner={isOwner} isSubscriber={isSubscriber} />
         </div>
       )}
 
@@ -281,7 +296,7 @@ export default function ProfileTabs({ posts, isOwner }: Props) {
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-0.5">
-              <PostGrid posts={savedPosts} emptyLabel="Aucun post sauvegardé." />
+              <PostGrid posts={savedPosts} emptyLabel="Aucun post sauvegardé." isOwner={isOwner} isSubscriber={isSubscriber} />
             </div>
           )}
         </>

@@ -115,6 +115,8 @@ export default async function ProfilePage({
             posts={user.Post.map((p) => ({
             ...p,
             content:  p.content ?? "",
+            price:      p.price,      
+            previewUrl: p.previewUrl,
             medias:   p.PostMedia,
             likes:    p.Like,
             comments: p.Comment,
@@ -126,6 +128,7 @@ export default async function ProfilePage({
             },
             }))}
             isOwner={isOwner}
+            viewerTier={viewerTier}
           />
         </div>
       </main>
