@@ -99,9 +99,16 @@ function PostGrid({
             className="relative aspect-square bg-white/5 overflow-hidden group"
           >
             {isLocked ? (
-              /* Placeholder flouté pour les posts abonnés verrouillés */
-              <div className="w-full h-full bg-gradient-to-br from-purple-900/60 to-purple-800/40 flex items-center justify-center">
-                <div className="w-full h-full absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSJyZ2JhKDEwMCw2MCwxNTAsMC4xKSIvPjwvc3ZnPg==')] opacity-30"/>
+              <div className="w-full h-full relative overflow-hidden">
+                {/* Simulation image floutée avec dégradé animé */}
+                <div className="w-full h-full bg-gradient-to-br from-purple-900/80 via-purple-800/60 to-purple-700/80"
+                  style={{
+                    backgroundImage: `
+                      radial-gradient(ellipse at 20% 30%, rgba(139,92,246,0.4) 0%, transparent 60%),
+                      radial-gradient(ellipse at 80% 70%, rgba(109,40,217,0.3) 0%, transparent 60%)
+                    `,
+                  }}
+                />
               </div>
             ) : mediaToShow ? (
               mediaToShow.type === "VIDEO" ? (
