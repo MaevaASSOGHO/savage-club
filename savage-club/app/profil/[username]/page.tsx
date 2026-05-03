@@ -21,17 +21,9 @@ export default async function ProfilePage({
   const user = await prisma.user.findUnique({
     where: { username },
     include: {
-      Post: {
-        where: { status: "PUBLISHED" },
-        include: {
-          Like: true,
-          Comment: true,
-          PostMedia: { orderBy: { order: "asc" } },
-        },
-        orderBy: { createdAt: "desc" },
-      },
-      Follow_Follow_followerIdToUser: true,
+      Follow_Follow_followerIdToUser:  true,
       Follow_Follow_followingIdToUser: true,
+      _count: { select: { Post: { where: { status: "PUBLISHED" } } } },
     },
   });
 
@@ -42,7 +34,8 @@ export default async function ProfilePage({
   const hasBadge =
     (user.role === "CREATOR" || user.role === "TRAINER") &&
     accountAgeMonths >= 3 &&
-    user.Post.length >= 60;
+    user._count.Post >= 60;
+
 
   const isOwner = session?.user?.email === user.email;
 
@@ -89,7 +82,7 @@ export default async function ProfilePage({
           />
 
           <ProfileStats
-            postCount={user.Post.length}
+            postCount={user._count.Post}
             followerCount={user.Follow_Follow_followerIdToUser.length}
             followingCount={user.Follow_Follow_followingIdToUser.length}
             username={user.username}
@@ -112,21 +105,7 @@ export default async function ProfilePage({
           )}
 
           <ProfileTabs
-            posts={user.Post.map((p) => ({
-            ...p,
-            content:  p.content ?? "",
-            price:      p.price,      
-            previewUrl: p.previewUrl,
-            medias:   p.PostMedia,
-            likes:    p.Like,
-            comments: p.Comment,
-            user: {
-              id:        user.id,
-              username:  user.username,
-              avatar:    user.avatar,
-              isVerified: user.isVerified,
-            },
-            }))}
+            username={user.username}
             isOwner={isOwner}
             viewerTier={viewerTier}
           />
