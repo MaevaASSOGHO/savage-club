@@ -124,34 +124,50 @@ export default function ConversationWindow({
   async function sendMedia(file: File) {
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const uploadRes  = await fetch(`/api/upload`, { method: "POST", body: formData });
-      const uploadData = await uploadRes.json();
-      if (!uploadRes.ok || !uploadData.url) return;
+      let url: string;
+      let mediaType: string;
 
-      const { url, type: mediaType, filename } = uploadData;
-      const parsedPrice = price ? parseInt(price) : undefined;
+      if (file.type.startsWith("video/")) {
+        // Upload direct vers Cloudinary pour les vidéos (évite limite 4.5MB Vercel)
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!);
+        const res  = await fetch(
+          `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/video/upload`,
+          { method: "POST", body: formData }
+        );
+        const data = await res.json();
+        url       = data.secure_url;
+        mediaType = "VIDEO";
+      } else {
+        // Images et documents via notre route API
+        const formData = new FormData();
+        formData.append("file", file);
+        const res  = await fetch("/api/upload", { method: "POST", body: formData });
+        const data = await res.json();
+        url        = data.url;
+        mediaType  = data.type;
+      }
 
-      await fetch(`/api/conversations/${conversation.id}/messages`, {
-        method:  "POST",
+      const tmp: Message = {
+        id: `tmp-${Date.now()}`, content: "", mediaUrl: url,
+        mediaType, createdAt: new Date().toISOString(),
+        senderId: currentUserId, price: null,
+        isUnlocked: true, locked: false,
+        sender: { id: currentUserId, username: "Vous", displayName: "Vous", avatar: null },
+      };
+      setMessages((prev) => [...prev, tmp]);
+      const res = await fetch(`/api/conversations/${conversation.id}/messages`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          content:   mediaType === "DOCUMENT" ? (filename ?? file.name) : "",
-          mediaUrl:  url,
-          mediaType: mediaType ?? (file.type.startsWith("video/") ? "VIDEO" : "IMAGE"),
-          price:     parsedPrice,
-        }),
+        body: JSON.stringify({ mediaUrl: url, mediaType }),
       });
-
-      const data = await (await fetch(`/api/conversations/${conversation.id}/messages`)).json();
-      setMessages(data.messages ?? []);
-      setPrice(""); setShowPriceInput(false);
+      const real = await res.json();
+      setMessages((prev) => prev.map((m) => m.id === tmp.id ? real : m));
     } finally {
       setUploading(false);
     }
   }
-
 
   async function handleDelete(msgId: string, forEveryone: boolean) {
     await fetch(`/api/conversations/${conversation.id}/messages/${msgId}`, {

@@ -202,8 +202,12 @@ export default function MessageBubble({
               )}
               
               {/* Texte */}
-              {msg.content && msg.mediaType !== "DOCUMENT" && (
-                <div className={`px-4 py-2.5 rounded-2xl ...`}>
+              {msg.content && (
+                <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                  isMine
+                    ? "bg-amber-400 text-black rounded-br-sm font-medium"
+                    : "bg-white/10 text-white rounded-bl-sm"
+                }`}>
                   {msg.content}
                 </div>
               )}

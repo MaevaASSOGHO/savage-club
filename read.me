@@ -190,3 +190,11 @@ curl -X POST https://api.resend.com/emails \
   -H "Content-Type: application/json" \
 
   -d '{"from":"onboarding@resend.dev","to":"tabouretgangbusiness@gmail.com","subject":"Test","html":"<p>Test</p>"}'
+
+
+  {/* Texte */}
+{msg.content && msg.mediaType !== "DOCUMENT" && (
+  <div className={`px-4 py-2.5 rounded-2xl ...`}>
+    {msg.content}
+  </div>
+)}
