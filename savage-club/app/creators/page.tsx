@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import PostCard from "@/components/PostCard";
 import FeedLayout from "@/components/FeedLayout";
 
+export const dynamic = "force-dynamic";
+
 export default async function CreatorsPage() {
   const postsFromDb = await prisma.post.findMany({
     where: {
@@ -13,6 +15,7 @@ export default async function CreatorsPage() {
         select: {
           id: true,
           username: true,
+          displayName: true,
           avatar: true,
           isVerified: true,
         },

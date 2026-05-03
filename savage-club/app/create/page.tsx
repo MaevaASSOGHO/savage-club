@@ -53,15 +53,76 @@ export default function CreatePage() {
     return file.type.startsWith("video/") ? "VIDEO" : "IMAGE";
   }
 
+  async function compressImage(file: File): Promise<File> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const canvas  = document.createElement("canvas");
+        const MAX_DIM = 2048;
+        let { width, height } = img;
+
+        // Redimensionner si trop grand
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width > height) { height = Math.round(height * MAX_DIM / width); width = MAX_DIM; }
+          else                { width  = Math.round(width  * MAX_DIM / height); height = MAX_DIM; }
+        }
+
+        canvas.width  = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) { resolve(file); return; }
+            // Si toujours > 8MB, recompresser avec qualité réduite
+            if (blob.size > 8 * 1024 * 1024) {
+              canvas.toBlob(
+                (blob2) => resolve(blob2 ? new File([blob2], file.name, { type: "image/jpeg" }) : file),
+                "image/jpeg", 0.6
+              );
+            } else {
+              resolve(new File([blob], file.name, { type: "image/jpeg" }));
+            }
+          },
+          "image/jpeg", 0.85
+        );
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+      img.src = url;
+    });
+  }
+
   async function uploadFile(file: File, index: number) {
+    const maxSize = file.type.startsWith("video/") ? 100 * 1024 * 1024 : 10 * 1024 * 1024;
+
+    // Compresser les images trop lourdes
+    let fileToUpload = file;
+    if (file.type.startsWith("image/") && file.size > 8 * 1024 * 1024) {
+      setMedias((prev) => prev.map((m, i) =>
+        i === index ? { ...m, uploading: true, error: null } : m
+      ));
+      fileToUpload = await compressImage(file);
+    }
+
+    if (fileToUpload.size > maxSize) {
+      const maxLabel = file.type.startsWith("video/") ? "100MB" : "10MB";
+      setMedias((prev) => prev.map((m, i) =>
+        i === index ? { ...m, error: `Fichier trop lourd (max ${maxLabel})`, uploading: false } : m
+      ));
+      return;
+    }
+
     setMedias((prev) => prev.map((m, i) => i === index ? { ...m, uploading: true, error: null } : m));
     try {
-      const cloudName   = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+      const cloudName    = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
       const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-      const isVideo     = file.type.startsWith("video/");
+      const isVideo      = file.type.startsWith("video/");
 
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", fileToUpload);
       formData.append("upload_preset", uploadPreset!);
       formData.append("folder", "savage-club");
 
@@ -72,9 +133,13 @@ export default function CreatePage() {
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.error?.message || "Upload échoué");
-      setMedias((prev) => prev.map((m, i) => i === index ? { ...m, uploadedUrl: data.secure_url, uploading: false } : m));
+      setMedias((prev) => prev.map((m, i) =>
+        i === index ? { ...m, uploadedUrl: data.secure_url, uploading: false } : m
+      ));
     } catch (err: any) {
-      setMedias((prev) => prev.map((m, i) => i === index ? { ...m, error: err.message, uploading: false } : m));
+      setMedias((prev) => prev.map((m, i) =>
+        i === index ? { ...m, error: err.message, uploading: false } : m
+      ));
     }
   }
 

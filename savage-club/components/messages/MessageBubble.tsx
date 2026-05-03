@@ -173,7 +173,8 @@ export default function MessageBubble({
                     src={msg.mediaUrl}
                     controls
                     className="rounded-2xl max-h-56"
-                    controlsList="nodownload"
+                    // controlsList="nodownload"
+                    controlsList="nodownload nofullscreen"
                     onContextMenu={(e) => e.preventDefault()}
                   />
                   <MessageWatermark msgId={msg.id}/>
