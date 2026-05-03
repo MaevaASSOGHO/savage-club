@@ -67,15 +67,16 @@ export default function ConversationWindow({
   }, [conversation.id]);
 
   // Recharger les messages quand l'utilisateur revient sur la page
-  // (après un paiement Stripe ou MF)
+  // Polling pendant 30s pour laisser le webhook MF s'exécuter
   useEffect(() => {
     function handleVisibilityChange() {
       if (document.visibilityState === "visible") {
-        // Recharger immédiatement
-        fetchMessages();
-        // Et encore après 2s et 5s pour laisser le webhook s'exécuter
-        setTimeout(fetchMessages, 2000);
-        setTimeout(fetchMessages, 5000);
+        let count = 0;
+        const interval = setInterval(() => {
+          fetchMessages();
+          count++;
+          if (count >= 10) clearInterval(interval);
+        }, 3000);
       }
     }
     document.addEventListener("visibilitychange", handleVisibilityChange);
