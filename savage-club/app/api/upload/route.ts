@@ -28,15 +28,23 @@ export async function POST(req: Request) {
     const result = await cloudinary.uploader.upload(base64, {
       folder:        "savage-club",
       resource_type: isVideo ? "video" : isDocument ? "raw" : "image",
+      access_mode:   "public",
       // Pour les documents, garder le nom original
       ...(isDocument && { public_id: `doc_${Date.now()}_${file.name.replace(/\s+/g, "_")}` }),
     });
 
+    let finalUrl = result.secure_url;
+    if (isVideo) {
+      // Forcer mp4 pour compatibilité navigateur
+      finalUrl = result.secure_url.replace(/\.[^.]+$/, ".mp4");
+    }
+
     return NextResponse.json({
-      url:      result.secure_url,
+      url:      finalUrl,
       type:     isVideo ? "VIDEO" : isDocument ? "DOCUMENT" : "IMAGE",
       filename: file.name,
     });
+
   } catch (err: any) {
     console.error("Upload error:", err);
     return NextResponse.json({ error: "Erreur upload" }, { status: 500 });
