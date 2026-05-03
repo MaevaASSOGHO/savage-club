@@ -14,6 +14,8 @@ export async function POST(req: NextRequest) {
     }
 
     const { amount, type, recipientId, description, tier, returnTo } = await req.json();
+    // Mapper MESSAGE_UNLOCK → MESSAGE pour Prisma
+    const prismaType = type === "MESSAGE_UNLOCK" ? "MESSAGE" : type;
 
     if (!amount || !type || !recipientId) {
       return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 });
@@ -34,7 +36,7 @@ export async function POST(req: NextRequest) {
         platformFee:   Math.round(amount * 0.1),
         creatorAmount: Math.round(amount * 0.9),
         status:        "PENDING",
-        type,
+        type:          prismaType,
         provider:      "MONEYFUSION",
         description:   description ?? null,
       },
