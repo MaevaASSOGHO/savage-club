@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Non connecté" }, { status: 401 });
     }
 
-    const { amount, type, recipientId, description, tier, returnTo, messageId, conversationId } = await req.json();
+    const { amount, type, recipientId, description, tier, returnTo, messageId, conversationId, postId } = await req.json();
 
     // Mapper MESSAGE_UNLOCK → MESSAGE pour Prisma
     const prismaType = type === "MESSAGE_UNLOCK" ? "MESSAGE" : type;
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
       returnUrl:  `${APP_URL}/payments/confirm?returnTo=${encodeURIComponent(returnTo ?? "/")}`,
       messageId:     messageId ?? "", 
       conversationId: conversationId ?? "",
-
+      postId,
     });
 
     await prisma.payment.update({

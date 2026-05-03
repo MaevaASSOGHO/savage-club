@@ -58,6 +58,7 @@ export async function createMFPayment(params: {
   returnUrl?: string;
   messageId?:      string;  
   conversationId?: string; 
+  postId?:         string; 
 }): Promise<MFPaymentResponse> {
   const body = {
     totalPrice:    params.amount,
@@ -72,6 +73,7 @@ export async function createMFPayment(params: {
         tier:      params.tier ?? "",
         messageId:      params.messageId ?? "",   
         conversationId: params.conversationId ?? "",
+        postId:         params.postId ?? "",
       },
     ],
     return_url:  params.returnUrl ?? `${APP_URL}/payments/confirm`,
