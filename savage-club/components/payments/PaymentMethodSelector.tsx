@@ -80,6 +80,8 @@ export default function PaymentMethodSelector({
   const [error,    setError]    = useState<string | null>(null);
 
   const amountEur = (amount * FCFA_TO_EUR).toFixed(2);
+  const MF_FEE_RATE  = 0.03;
+  const amountWithFees = Math.round(amount * (1 + MF_FEE_RATE));
 
   async function handlePay() {
     setLoading(true);
@@ -93,7 +95,7 @@ export default function PaymentMethodSelector({
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({
-        amount,
+        amount:      amountWithFees,
         type:        mfPayload.type,
         recipientId: mfPayload.recipientId,
         description: mfPayload.description,
@@ -186,7 +188,7 @@ export default function PaymentMethodSelector({
                   <p className="text-white/40 text-xs mt-0.5">{p.subtitle}</p>
                   <p className={`text-xs font-semibold mt-1 ${p.dot}`}>
                     {p.id === "moneyfusion"
-                      ? `${Math.round(amount * 1.03).toLocaleString("fr-FR")} FCFA débités (frais 3% inclus)`
+                      ? `${amountWithFees.toLocaleString("fr-FR")} FCFA débités (frais 3% inclus)`
                       : `≈ ${amountEur} EUR`
                     }
                   </p>
@@ -222,7 +224,7 @@ export default function PaymentMethodSelector({
                   {selected === "moneyfusion" ? "Redirection..." : "Chargement..."}
                 </>
               ) : selected === "moneyfusion"
-                ? `Payer ${amount.toLocaleString("fr-FR")} FCFA`
+                ? `Payer ${amountWithFees.toLocaleString("fr-FR")} FCFA`
                 : `Payer ≈ ${amountEur} EUR`
               }
             </button>
