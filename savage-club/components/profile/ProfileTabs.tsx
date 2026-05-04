@@ -217,6 +217,12 @@ export default function ProfileTabs({ username, isOwner, viewerTier = "NONE" }: 
     setLoading(false);
   }, [username, loading, hasMore]);
 
+  useEffect(() => {
+    console.log("[ProfileTabs] posts:", posts.map(p => ({ 
+      id: p.id, price: p.price, locked: p.locked, visibility: p.visibility 
+    })));
+  }, [posts]);
+  
   // Charger au changement d'onglet
   useEffect(() => {
     if (activeTab === "saved") return;
