@@ -85,9 +85,10 @@ function PostGrid({
       {posts.map((post) => {
         const firstMedia   = post.medias[0];
         const hasMultiple  = post.medias.length > 1;
-        const isSubscriberOnly = post.visibility === "SUBSCRIBERS";
         const isPaid       = !!(post.price && post.price > 0);
-        const isLocked     = post.locked || (!isOwner && isSubscriberOnly && !isSubscriber);
+        const isSubscriberOnly = post.visibility === "SUBSCRIBERS" && !isPaid;
+        const isLocked = post.locked || (!isOwner && isSubscriberOnly && !isSubscriber);
+
         const mediaToShow  = isPaid && post.previewUrl
           ? { url: post.previewUrl, type: post.previewUrl.includes("/video/") ? "VIDEO" : "IMAGE" }
           : firstMedia; // toujours afficher, blur géré par CSS

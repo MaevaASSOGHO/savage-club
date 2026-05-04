@@ -79,7 +79,7 @@ export async function GET(
   return NextResponse.json({
     posts: items.map((p) => {
       const isPurchased = purchasedPostIds.includes(p.id);
-      const isLocked    = !isOwner && p.visibility === "SUBSCRIBERS" && !isSubscriber;
+      const isLocked    = !isOwner && p.visibility === "SUBSCRIBERS" && !isSubscriber && !isPurchased;
 
       return {
         id:         p.id,
