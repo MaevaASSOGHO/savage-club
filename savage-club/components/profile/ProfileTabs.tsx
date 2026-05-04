@@ -90,7 +90,7 @@ function PostGrid({
         const isLocked     = post.locked || (!isOwner && isSubscriberOnly && !isSubscriber);
         const mediaToShow  = isPaid && post.previewUrl
           ? { url: post.previewUrl, type: post.previewUrl.includes("/video/") ? "VIDEO" : "IMAGE" }
-          : (isLocked ? null : firstMedia);
+          : firstMedia; // toujours afficher, blur géré par CSS
 
         return (
           <Link
@@ -98,36 +98,24 @@ function PostGrid({
             href={`/post/${post.id}`}
             className="relative aspect-square bg-white/5 overflow-hidden group"
           >
-            {isLocked ? (
-              <div className="w-full h-full relative overflow-hidden">
-                {/* Simulation image floutée avec dégradé animé */}
-                <div className="w-full h-full bg-gradient-to-br from-purple-900/80 via-purple-800/60 to-purple-700/80"
-                  style={{
-                    backgroundImage: `
-                      radial-gradient(ellipse at 20% 30%, rgba(139,92,246,0.4) 0%, transparent 60%),
-                      radial-gradient(ellipse at 80% 70%, rgba(109,40,217,0.3) 0%, transparent 60%)
-                    `,
-                  }}
-                />
-              </div>
-            ) : mediaToShow ? (
+            {mediaToShow ? (
               mediaToShow.type === "VIDEO" ? (
                 <video
                   src={mediaToShow.url}
-                  className="w-full h-full object-cover"
+                  className={`w-full h-full object-cover transition-all ${isLocked ? "blur-md scale-105" : ""}`}
                   muted playsInline preload="metadata"
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLVideoElement).play().catch(() => {}); }}
+                  onMouseEnter={(e) => { if (!isLocked) (e.currentTarget as HTMLVideoElement).play().catch(() => {}); }}
                   onMouseLeave={(e) => { const v = e.currentTarget as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
                 />
               ) : (
                 <img
                   src={mediaToShow.url}
                   alt={post.content}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  className={`w-full h-full object-cover transition-all ${isLocked ? "blur-md scale-105" : "group-hover:scale-105"} duration-300`}
                 />
               )
             ) : (
-              <div className="w-full h-full flex items-center justify-center p-3">
+              <div className={`w-full h-full flex items-center justify-center p-3 ${isLocked ? "blur-md" : ""}`}>
                 <p className="text-white/40 text-xs text-center line-clamp-4">{post.content}</p>
               </div>
             )}

@@ -24,30 +24,23 @@ export async function GET(
 
   const isOwner = session?.user?.email === profileUser.email;
 
-  // Niveau d'abonnement du visiteur
-  let isSubscriber = false;
+  let isSubscriber    = false;
+  let purchasedPostIds: string[] = [];
+
   if (session?.user?.email && !isOwner) {
     const viewer = await prisma.user.findUnique({
       where:  { email: session.user.email },
       select: { id: true },
     });
     if (viewer) {
+      // Abonnement actif
       const sub = await prisma.subscription.findFirst({
         where:  { subscriberId: viewer.id, creatorId: profileUser.id, status: "ACTIVE" },
         select: { tier: true },
       });
       isSubscriber = !!sub && (sub.tier === "SAVAGE" || sub.tier === "VIP");
-    }
-  }
 
-  // Filtrage des posts selon le paiement
-  let purchasedPostIds: string[] = [];
-  if (session?.user?.email && !isOwner) {
-    const viewer = await prisma.user.findUnique({
-      where:  { email: session.user.email },
-      select: { id: true },
-    });
-    if (viewer) {
+      // Posts déjà achetés
       const purchases = await prisma.postPurchase.findMany({
         where:  { userId: viewer.id },
         select: { postId: true },
@@ -55,7 +48,7 @@ export async function GET(
       purchasedPostIds = purchases.map((p) => p.postId);
     }
   }
-  // Filtre selon l'onglet — pas de filtre visibility, on retourne tout
+
   let where: any = {
     userId: profileUser.id,
     status: "PUBLISHED",
@@ -85,20 +78,21 @@ export async function GET(
 
   return NextResponse.json({
     posts: items.map((p) => {
-      // Masquer les URLs pour les posts abonnés si non abonné
       const isPurchased = purchasedPostIds.includes(p.id);
-      const isLocked = !isOwner && p.visibility === "SUBSCRIBERS" && !isSubscriber;
+      const isLocked    = !isOwner && p.visibility === "SUBSCRIBERS" && !isSubscriber;
+
       return {
         id:         p.id,
         content:    p.content ?? "",
         visibility: p.visibility,
+        // Si déjà acheté → price = null pour ne plus afficher l'overlay payant
+        price:      isPurchased ? null : p.price,
         previewUrl: p.previewUrl,
-        // Si verrouillé → pas d'URL réelle exposée
-        medias:  p.PostMedia,
+        // Toujours exposer les URLs — le CSS gère le flou
+        medias:     p.PostMedia,
         likes:      p.Like,
         comments:   p.Comment,
         locked:     isLocked,
-        price:   isPurchased ? null : p.price,
       };
     }),
     nextCursor,
