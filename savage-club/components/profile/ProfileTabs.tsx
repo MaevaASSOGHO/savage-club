@@ -87,8 +87,7 @@ function PostGrid({
         const hasMultiple  = post.medias.length > 1;
         const isPaid       = !!(post.price && post.price > 0);
         const isSubscriberOnly = post.visibility === "SUBSCRIBERS" && !isPaid;
-        const isLocked = post.locked || (!isOwner && isSubscriberOnly && !isSubscriber);
-
+        const isLocked         = post.locked === true; // calculé côté serveur pour éviter les incohérences
         const mediaToShow  = isPaid && post.previewUrl
           ? { url: post.previewUrl, type: post.previewUrl.includes("/video/") ? "VIDEO" : "IMAGE" }
           : firstMedia; // toujours afficher, blur géré par CSS
@@ -222,7 +221,7 @@ export default function ProfileTabs({ username, isOwner, viewerTier = "NONE" }: 
       id: p.id, price: p.price, locked: p.locked, visibility: p.visibility 
     })));
   }, [posts]);
-  
+
   // Charger au changement d'onglet
   useEffect(() => {
     if (activeTab === "saved") return;
