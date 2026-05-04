@@ -76,6 +76,14 @@ export async function GET(
   const items      = hasMore ? posts.slice(0, LIMIT) : posts;
   const nextCursor = hasMore ? items[items.length - 1].id : null;
 
+  console.log("[profil posts] purchases:", purchasedPostIds);
+  console.log("[profil posts] items:", items.map(p => ({ 
+    id: p.id, 
+    price: p.price, 
+    visibility: p.visibility,
+    isPurchased: purchasedPostIds.includes(p.id)
+  })));
+  
   return NextResponse.json({
     posts: items.map((p) => {
       const isPurchased = purchasedPostIds.includes(p.id);
