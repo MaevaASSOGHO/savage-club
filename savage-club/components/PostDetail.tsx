@@ -62,10 +62,9 @@ function VerifiedBadge({ size = 14 }: { size?: number }) {
 }
 
 // ── Partie gauche : média ─────────────────────────────────────────────────
-function MediaPanel({ medias, postId, watermarkText }: {
+function MediaPanel({ medias, postId }: {
   medias: Media[];
   postId?: string;
-  watermarkText?: string;
 }) {
   const [idx, setIdx] = useState(0);
   const current = medias[idx];
@@ -87,7 +86,7 @@ function MediaPanel({ medias, postId, watermarkText }: {
         <VideoPlayer
           key={current.url}
           src={current.url}
-          watermarkText={watermarkText}
+          postId={postId}
           fill
           autoPlay
         />
@@ -234,7 +233,7 @@ export default function PostDetail({ post, viewerLiked, viewerSaved, viewerId, p
         {/* Colonne gauche — média */}
         <div className={`flex-shrink-0 bg-black flex items-center justify-center relative ${isReel ? "w-[380px]" : "w-[520px]"}`}>
           {unlocked ? (
-            <MediaPanel medias={post.medias} postId={post.id} watermarkText={`@${post.user.username}`} />
+            <MediaPanel medias={post.medias} postId={post.id} />
           ) : post.previewUrl ? (
             <div className="relative w-full h-full flex items-center justify-center">
               {post.previewUrl.includes("/video/") ? (
@@ -580,7 +579,7 @@ export default function PostDetail({ post, viewerLiked, viewerSaved, viewerId, p
         {/* Média plein écran */}
         <div className="flex-shrink-0 relative">
           {unlocked ? (
-            <MediaPanel medias={post.medias} postId={post.id} watermarkText={`@${post.user.username}`} />
+            <MediaPanel medias={post.medias} postId={post.id} />
           ) : post.previewUrl ? (
             <div className="relative aspect-[4/5]">
               {post.previewUrl.includes("/video/") ? (

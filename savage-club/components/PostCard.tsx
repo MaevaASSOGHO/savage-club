@@ -445,7 +445,7 @@ export default function PostCard({ post }: { post: Post }) {
                   // ne déclenche pas la navigation du <Link>
                   <VideoPlayer
                     src={current.url}
-                    watermarkText={`@${post.user.username}`}
+                    postId={post.id}
                     fill
                   />
                 ) : (

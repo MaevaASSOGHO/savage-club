@@ -1,6 +1,8 @@
+// videoplayer.tsx
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -11,7 +13,16 @@ export interface VideoPlayerProps {
   src: string;
   /** Poster / thumbnail */
   poster?: string;
-  /** Texte du watermark (ex : "@username") */
+  /**
+   * ID du post — déclenche le watermark token-based (même logique que MediaWatermark) :
+   * affiche l'identité du spectateur + un token rotatif pour tracer les fuites.
+   * Prend le dessus sur watermarkText si les deux sont fournis.
+   */
+  postId?: string;
+  /**
+   * Texte statique de repli pour le watermark (ex : dans MessageBubble en plein écran).
+   * Ignoré si postId est fourni.
+   */
   watermarkText?: string;
   /** Classes Tailwind supplémentaires sur le wrapper */
   className?: string;
@@ -97,6 +108,7 @@ const CollapseIcon = () => (
 export default function VideoPlayer({
   src,
   poster,
+  postId,
   watermarkText,
   className = '',
   style,
@@ -108,7 +120,47 @@ export default function VideoPlayer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
-  const controlsHideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const controlsHideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  // ─── Watermark token-based (identité du spectateur) ─────────────────────────
+  const { data: session, status } = useSession();
+  const [wmToken, setWmToken] = useState<string | null>(null);
+  const [wmPositions, setWmPositions] = useState<{ top: string; left: string }[]>([]);
+
+  useEffect(() => {
+    if (!postId || status !== 'authenticated') return;
+    fetch('/api/media/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ postId }),
+    })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.token) setWmToken(data.token); })
+      .catch(() => {});
+  }, [postId, status]);
+
+  useEffect(() => {
+    // Positions aléatoires pour le watermark token (comme MediaWatermark)
+    if (!postId) return;
+    const generate = () =>
+      setWmPositions(
+        Array.from({ length: 5 }).map(() => ({
+          top:  `${Math.random() * 80}%`,
+          left: `${Math.random() * 80}%`,
+        }))
+      );
+    generate();
+    const interval = setInterval(generate, 4000);
+    return () => clearInterval(interval);
+  }, [postId]);
+
+  // Texte final du watermark :
+  // • postId fourni  → identité du spectateur + token (traçable)
+  // • watermarkText  → texte statique de repli (MessageBubble en fullscreen)
+  const resolvedWatermarkText =
+    postId && session?.user && wmToken
+      ? `@${session.user.name ?? session.user.email} • ${wmToken}`
+      : watermarkText ?? null;
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -242,6 +294,15 @@ export default function VideoPlayer({
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
+  // Positions fixes pour le watermark statique (watermarkText sans postId)
+  const defaultWmPositions = [
+    { top: '10%', left: '5%'  },
+    { top: '10%', left: '55%' },
+    { top: '45%', left: '30%' },
+    { top: '75%', left: '5%'  },
+    { top: '75%', left: '55%' },
+  ];
+
   // ─── Styles plein écran simulé vs normal ────────────────────────────────────
   const wrapperStyle: React.CSSProperties = isFullscreen
     ? {
@@ -299,39 +360,37 @@ export default function VideoPlayer({
           onClick={(e) => { e.stopPropagation(); togglePlay(); }}
         />
 
-        {/* ── Watermark — toujours dans le DOM ─────────────────────────── */}
-        {watermarkText && (
+        {/* ── Watermark — toujours dans le DOM, visible en plein écran simulé ── */}
+        {resolvedWatermarkText && (
           <div
             aria-hidden
             style={{
-              position: 'absolute',
-              inset: 0,
-              pointerEvents: 'none',
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gridTemplateRows: 'repeat(3, 1fr)',
-              padding: '8%',
-              gap: '4%',
+              position: 'absolute', inset: 0,
+              pointerEvents: 'none', overflow: 'hidden',
+              zIndex: 10,
             }}
           >
-            {Array.from({ length: 9 }).map((_, i) => (
+            {(postId ? wmPositions : defaultWmPositions).map((p, i) => (
               <span
                 key={i}
                 style={{
-                  color: 'rgba(251,191,36,0.13)',
-                  fontSize: 'clamp(9px, 1.5vw, 13px)',
-                  fontWeight: 600,
+                  position:   'absolute',
+                  top:        p.top,
+                  left:       p.left,
+                  color:      'white',
+                  fontSize:   10,
+                  fontWeight: 500,
                   fontFamily: 'monospace',
-                  letterSpacing: '0.05em',
-                  transform: 'rotate(-25deg)',
+                  opacity:    0.18,
+                  textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+                  transform:  'rotate(-15deg)',
                   whiteSpace: 'nowrap',
                   userSelect: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  // Transition fluide pour les positions rotatives (mode token)
+                  transition: postId ? 'all 4000ms' : undefined,
                 }}
               >
-                {watermarkText}
+                {resolvedWatermarkText}
               </span>
             ))}
           </div>
