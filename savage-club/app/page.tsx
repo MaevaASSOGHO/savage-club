@@ -60,11 +60,14 @@ export default async function HomePage() {
           <div key={post.id} className="w-full">
             <PostCard
               post={{
-                id:       post.id,
-                content:  post.content ?? "",
-                medias:   post.PostMedia,
-                likes:    post.Like,
-                comments: post.Comment,
+                id:         post.id,
+                content:    post.content ?? "",
+                createdAt:  post.createdAt.toISOString(),
+                price:      post.price,
+                previewUrl: post.previewUrl,
+                medias:     post.PostMedia,
+                likes:      post.Like,
+                comments:   post.Comment,
                 user: {
                   id:          post.User.id,
                   username:    post.User.username,
