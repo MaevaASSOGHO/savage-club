@@ -16,6 +16,7 @@ import SectionSuivis from "@/components/parametres/sections/SectionSuivis";
 import SectionReservations from "@/components/parametres/sections/SectionReservations";
 import SectionPlaceholder from "@/components/parametres/sections/SectionPlaceholder";
 import SectionWallet from "@/components/parametres/sections/SectionWallet";
+import SectionHistorique from "./sections/SectionHistorique";
 
 type User = {
   id: string;
@@ -93,7 +94,7 @@ function renderSection(section: Section, user: User, navigate: (s: Section) => v
     case "createurs_suivis":  return <SectionSuivis role="CREATOR" />;
     case "formateurs_suivis": return <SectionSuivis role="TRAINER" />;
     case "reservations":      return <SectionReservations userRole={user.role} />;
-    case "historique":        return <SectionPlaceholder title="Historique d'achats" desc="Vos achats de contenus apparaîtront ici." />;
+    case "historique":        return <SectionHistorique />;
     case "notifications_prefs": return <SectionPlaceholder title="Notifications" desc="Préférences de notifications à venir." />;
     case "langue":            return <SectionPlaceholder title="Langue" desc="Sélection de langue à venir." />;
     default:                  return null;
