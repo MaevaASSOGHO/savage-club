@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, Suspense } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import PaymentMethodSelector from "@/components/payments/PaymentMethodSelector";
 
 const ICE_SERVERS = {
   iceServers: [
@@ -13,6 +14,8 @@ const ICE_SERVERS = {
     { urls: "stun:stun.cloudflare.com:3478" },
   ],
 };
+
+const CALL_DURATION = 10 * 60; // 10 minutes en secondes
 
 type BookingData = {
   id: string;
@@ -26,6 +29,13 @@ type BookingData = {
 };
 
 type CallState = "waiting" | "connecting" | "connected" | "ended" | "error";
+
+function formatTime(sec: number) {
+  if (sec <= 0) return "00:00";
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
 
 function formatCountdown(ms: number) {
   if (ms <= 0) return "00:00";
@@ -41,13 +51,23 @@ function CallRoomInner() {
   const { status }    = useSession();
   const { user }      = useCurrentUser();
 
-  const [booking,     setBooking]     = useState<BookingData | null>(null);
-  const [callState,   setCallState]   = useState<CallState>("waiting");
-  const [countdown,   setCountdown]   = useState<number>(0);
-  const [duration,    setDuration]    = useState<number>(0);
-  const [audioMuted,  setAudioMuted]  = useState(false);
-  const [videoHidden, setVideoHidden] = useState(false);
-  const [error,       setError]       = useState<string | null>(null);
+  const [booking,      setBooking]      = useState<BookingData | null>(null);
+  const [callState,    setCallState]    = useState<CallState>("waiting");
+  const [countdown,    setCountdown]    = useState<number>(0);
+  const [duration,     setDuration]     = useState<number>(0);
+  const [audioMuted,   setAudioMuted]   = useState(false);
+  const [videoHidden,  setVideoHidden]  = useState(false);
+  const [error,        setError]        = useState<string | null>(null);
+
+  // ── Chrono 10 minutes ──────────────────────────────────────────────────
+  const [timerActive,   setTimerActive]   = useState(false);
+  const [timerSeconds,  setTimerSeconds]  = useState(CALL_DURATION);
+  const [timerAlert,    setTimerAlert]    = useState<string | null>(null);
+  const [showExtend,    setShowExtend]    = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ── Prolongation ───────────────────────────────────────────────────────
+  const [showPayment, setShowPayment] = useState(false);
 
   const localVideoRef  = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -55,19 +75,18 @@ function CallRoomInner() {
   const localStreamRef = useRef<MediaStream | null>(null);
   const wsRef          = useRef<WebSocket | null>(null);
   const durationTimer  = useRef<NodeJS.Timeout | null>(null);
-
-  // Refs stables pour les handlers WS (évite la stale closure)
-  const isCreatorRef = useRef(false);
-  const isVideoRef   = useRef(false);
+  const isCreatorRef   = useRef(false);
+  const isVideoRef     = useRef(false);
 
   const isCreator = user?.id === booking?.creatorId;
   const isVideo   = booking?.type === "VIDEO_CALL";
   const other     = isCreator ? booking?.requester : booking?.creator;
+  const price     = isVideo ? 0 : 0; // sera rempli depuis booking
 
   useEffect(() => { isCreatorRef.current = isCreator; }, [isCreator]);
   useEffect(() => { isVideoRef.current   = isVideo;   }, [isVideo]);
 
-  // 1. Charger le booking
+  // Charger le booking
   useEffect(() => {
     if (!bookingId || status !== "authenticated") return;
     fetch(`/api/bookings/${bookingId}/info`)
@@ -80,7 +99,7 @@ function CallRoomInner() {
       .catch(() => setError("Erreur de chargement."));
   }, [bookingId, status]);
 
-  // 2. Compte à rebours
+  // Compte à rebours avant l'appel
   useEffect(() => {
     if (!booking) return;
     const scheduled = new Date(booking.scheduledAt).getTime();
@@ -90,7 +109,7 @@ function CallRoomInner() {
     return () => clearInterval(interval);
   }, [booking]);
 
-  // 3. WebSocket — seulement quand booking ET user sont prêts
+  // WebSocket
   useEffect(() => {
     if (!bookingId || !user?.id || !booking?.id) return;
 
@@ -128,6 +147,16 @@ function CallRoomInner() {
           }
           break;
 
+        // ── Chrono synchronisé ──────────────────────────────────────────
+        case "timer:start":
+          // Les deux participants reçoivent le signal et démarrent le chrono
+          startTimer();
+          break;
+
+        case "timer:end":
+          endCall();
+          break;
+
         case "peer-left":
         case "call-ended":
           endCall();
@@ -139,7 +168,41 @@ function CallRoomInner() {
     ws.onclose = (e) => console.log("[WS] Fermé:", e.code, e.reason);
 
     return () => ws.close();
-  }, [bookingId, user?.id, booking?.id]); // dépendances stables
+  }, [bookingId, user?.id, booking?.id]);
+
+  // ── Démarrer le chrono (côté créateur) ─────────────────────────────────
+  function handleStartTimer() {
+    // Envoyer le signal à l'autre participant via WebSocket
+    wsRef.current?.send(JSON.stringify({ type: "timer:start" }));
+    // Démarrer localement
+    startTimer();
+  }
+
+  function startTimer() {
+    setTimerActive(true);
+    setTimerSeconds(CALL_DURATION);
+    setTimerAlert(null);
+    setShowExtend(false);
+
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    timerRef.current = setInterval(() => {
+      setTimerSeconds((prev) => {
+        const next = prev - 1;
+
+        if (next === 120) setTimerAlert("⏰ 2 minutes restantes !");
+        if (next === 60)  { setTimerAlert("⚠️ 1 minute restante !"); setShowExtend(true); }
+        if (next === 0) {
+          clearInterval(timerRef.current!);
+          // Envoyer fin aux deux participants
+          wsRef.current?.send(JSON.stringify({ type: "timer:end" }));
+          endCall();
+        }
+
+        return next;
+      });
+    }, 1000);
+  }
 
   // Médias locaux
   async function startLocalMedia() {
@@ -160,7 +223,6 @@ function CallRoomInner() {
     }
   }
 
-  // Créateur lance l'appel
   async function startCall() {
     const stream = await startLocalMedia();
     if (!stream) return;
@@ -191,7 +253,6 @@ function CallRoomInner() {
     wsRef.current?.send(JSON.stringify({ type: "offer", offer }));
   }
 
-  // Abonné reçoit l'offre
   async function handleOffer(offer: RTCSessionDescriptionInit) {
     const stream = await startLocalMedia();
     if (!stream) return;
@@ -242,8 +303,12 @@ function CallRoomInner() {
     pcRef.current?.close();
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     if (durationTimer.current) clearInterval(durationTimer.current);
+    if (timerRef.current) clearInterval(timerRef.current);
     setCallState("ended");
   }
+
+  // Couleur du chrono selon le temps restant
+  const timerColor = timerSeconds > 120 ? "text-green-400" : timerSeconds > 60 ? "text-amber-400" : "text-red-400";
 
   // Écrans spéciaux
   if (error) return (
@@ -273,12 +338,48 @@ function CallRoomInner() {
       <div className="text-center space-y-4">
         <span className="text-5xl">📞</span>
         <p className="text-white font-bold text-xl">Appel terminé</p>
-        <p className="text-white/40 text-sm">Durée : {formatCountdown(duration * 1000)}</p>
+        <p className="text-white/40 text-sm">Durée : {formatTime(duration)}</p>
+        {!isCreator && (
+          <button
+            onClick={() => setShowPayment(true)}
+            className="bg-amber-400 hover:bg-amber-300 text-black font-bold px-6 py-2.5 rounded-full transition-all text-sm"
+          >
+            Réserver un nouvel appel
+          </button>
+        )}
         <button onClick={() => router.push("/")}
-          className="bg-amber-400 hover:bg-amber-300 text-black font-bold px-6 py-2.5 rounded-full transition-all text-sm">
+          className="block w-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white font-medium px-6 py-2.5 rounded-full transition-all text-sm">
           Retour à l'accueil
         </button>
       </div>
+      {showPayment && booking && (
+        <PaymentMethodSelector
+          amount={booking.type === "VIDEO_CALL"
+            ? (booking as any).videoCallPrice ?? 0
+            : (booking as any).audioCallPrice ?? 0}
+          label={`Nouvel ${booking.type === "VIDEO_CALL" ? "appel vidéo" : "appel audio"} instantané`}
+          onClose={() => setShowPayment(false)}
+          mfPayload={{
+            type:        booking.type === "VIDEO_CALL" ? "VIDEO_CALL" : "AUDIO_CALL",
+            recipientId: booking.creatorId,
+            route:       "booking",
+            returnTo:    `/profil/${booking.creator.username}`,
+            extra: {
+              creatorId:   booking.creatorId,
+              type:        booking.type,
+              scheduledAt: new Date().toISOString(),
+              amount:      0,
+              instant:     true,
+            },
+          }}
+          stripePayload={{
+            type:        booking.type === "VIDEO_CALL" ? "VIDEO_CALL" : "AUDIO_CALL",
+            recipientId: booking.creatorId,
+            description: `${booking.type === "VIDEO_CALL" ? "Appel vidéo" : "Appel audio"} instantané`,
+            returnTo:    `/profil/${booking.creator.username}`,
+          }}
+        />
+      )}
     </div>
   );
 
@@ -303,13 +404,38 @@ function CallRoomInner() {
             </p>
           </div>
         </div>
-        {callState === "connected" && (
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"/>
-            <span className="text-green-400 text-sm font-mono">{formatCountdown(duration * 1000)}</span>
-          </div>
-        )}
+
+        {/* Affichage temps */}
+        <div className="flex items-center gap-3">
+          {/* Durée de l'appel */}
+          {callState === "connected" && (
+            <div className="flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"/>
+              <span className="text-white/50 text-xs font-mono">{formatTime(duration)}</span>
+            </div>
+          )}
+
+          {/* Chrono 10 minutes */}
+          {timerActive && callState === "connected" && (
+            <div className={`flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-full px-3 py-1 ${timerSeconds <= 60 ? "animate-pulse" : ""}`}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={timerColor}>
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+              <span className={`font-mono text-sm font-bold ${timerColor}`}>
+                {formatTime(timerSeconds)}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Alerte chrono */}
+      {timerAlert && (
+        <div className="bg-amber-400/10 border-b border-amber-400/20 px-4 py-2 flex items-center justify-between">
+          <p className="text-amber-400 text-sm font-medium">{timerAlert}</p>
+          <button onClick={() => setTimerAlert(null)} className="text-amber-400/50 hover:text-amber-400 text-xs">✕</button>
+        </div>
+      )}
 
       {/* Zone vidéo */}
       <div className="flex-1 relative bg-black flex items-center justify-center">
@@ -335,6 +461,28 @@ function CallRoomInner() {
               <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"/>
               <span className="text-green-400 text-sm">En communication</span>
             </div>
+
+            {/* Bouton démarrer chrono — créateur uniquement, appel connecté */}
+            {isCreator && !timerActive && (
+              <button onClick={handleStartTimer}
+                className="flex items-center gap-2 bg-amber-400/20 hover:bg-amber-400/30 border border-amber-400/40 text-amber-400 font-semibold px-4 py-2 rounded-xl transition-all text-sm mt-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                </svg>
+                Démarrer le chrono (10 min)
+              </button>
+            )}
+
+            {/* Bouton prolonger — abonné uniquement, < 60s restantes */}
+            {!isCreator && showExtend && (
+              <button onClick={() => setShowPayment(true)}
+                className="flex items-center gap-2 bg-green-500/20 hover:bg-green-500/30 border border-green-500/40 text-green-400 font-semibold px-4 py-2 rounded-xl transition-all text-sm mt-2 animate-pulse">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                Prolonger l'appel
+              </button>
+            )}
           </div>
         )}
 
@@ -399,6 +547,32 @@ function CallRoomInner() {
           </div>
         )}
 
+        {/* Bouton démarrer chrono — version vidéo connectée */}
+        {isVideo && callState === "connected" && isCreator && !timerActive && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2">
+            <button onClick={handleStartTimer}
+              className="flex items-center gap-2 bg-black/60 hover:bg-black/80 border border-amber-400/40 text-amber-400 font-semibold px-4 py-2 rounded-full transition-all text-sm backdrop-blur-sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+              Démarrer le chrono
+            </button>
+          </div>
+        )}
+
+        {/* Bouton prolonger — version vidéo */}
+        {isVideo && callState === "connected" && !isCreator && showExtend && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2">
+            <button onClick={() => setShowPayment(true)}
+              className="flex items-center gap-2 bg-black/60 hover:bg-black/80 border border-green-500/40 text-green-400 font-semibold px-4 py-2 rounded-full transition-all text-sm backdrop-blur-sm animate-pulse">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+              </svg>
+              Prolonger l'appel
+            </button>
+          </div>
+        )}
+
         {isVideo && callState === "connected" && (
           <div className="absolute bottom-20 right-4 w-32 h-48 rounded-xl overflow-hidden border border-white/20 shadow-xl">
             <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover"/>
@@ -454,6 +628,33 @@ function CallRoomInner() {
             </svg>
           </button>
         </div>
+      )}
+
+      {/* PaymentMethodSelector pour prolonger */}
+      {showPayment && booking && (
+        <PaymentMethodSelector
+          amount={(booking as any).amount ?? 0}
+          label={`Prolonger — ${booking.type === "VIDEO_CALL" ? "Appel vidéo" : "Appel audio"} +10 min`}
+          onClose={() => setShowPayment(false)}
+          mfPayload={{
+            type:        booking.type === "VIDEO_CALL" ? "VIDEO_CALL" : "AUDIO_CALL",
+            recipientId: booking.creatorId,
+            route:       "booking",
+            returnTo:    `/appel/room/${bookingId}`,
+            extra: {
+              creatorId:   booking.creatorId,
+              type:        booking.type,
+              scheduledAt: new Date().toISOString(),
+              instant:     true,
+            },
+          }}
+          stripePayload={{
+            type:        booking.type === "VIDEO_CALL" ? "VIDEO_CALL" : "AUDIO_CALL",
+            recipientId: booking.creatorId,
+            description: `Prolongation ${booking.type === "VIDEO_CALL" ? "appel vidéo" : "appel audio"}`,
+            returnTo:    `/appel/room/${bookingId}`,
+          }}
+        />
       )}
     </div>
   );

@@ -7,6 +7,7 @@ import Link from "next/link";
 import ProtectedMedia from "@/components/ProtectedMedia";
 import MediaWatermark from "@/components/MediaWatermark";
 import ReportButton from "@/components/ReportButton";
+import VideoPlayer from "@/components/VideoPlayer";
 
 
 type Comment = {
@@ -153,7 +154,6 @@ export default function PostCard({ post }: { post: Post }) {
 
   // Charger l'état de sauvegarde et les collections
   useEffect(() => {
-    // Vérifier si le post est sauvegardé
     fetch(`/api/saved-posts/${post.id}`)
       .then((r) => r.json())
       .then((data) => {
@@ -162,7 +162,6 @@ export default function PostCard({ post }: { post: Post }) {
       })
       .catch(() => {});
 
-    // Charger les collections de l'utilisateur
     fetch("/api/collections")
       .then((r) => r.json())
       .then((data) => setCollections(data))
@@ -210,7 +209,7 @@ export default function PostCard({ post }: { post: Post }) {
       });
       
       if (res.ok) {
-        setIsFollowing(true); // Le bouton va disparaître
+        setIsFollowing(true);
       } else {
         console.error("Erreur follow:", await res.text());
       }
@@ -220,6 +219,7 @@ export default function PostCard({ post }: { post: Post }) {
       setFollowingLoading(false);
     }
   }
+
   async function handleFire() {
     const next = !fired;
     setFired(next);
@@ -268,7 +268,6 @@ export default function PostCard({ post }: { post: Post }) {
     
     const next = !saved;
     
-    // Si on veut sauvegarder et qu'on a des collections, on propose de choisir
     if (next && collections.length > 0 && collectionId === undefined) {
       setShowCollectionMenu(true);
       setSavingLoading(false);
@@ -367,7 +366,6 @@ export default function PostCard({ post }: { post: Post }) {
           </Link>
           {post.user.isVerified && <VerifiedBadge />}
           
-          {/* Bouton Follow - s'affiche UNIQUEMENT si l'utilisateur ne suit PAS déjà */}
           {session?.user?.id !== post.user.id && !isFollowing && (
             <button
               onClick={handleFollow}
@@ -384,19 +382,30 @@ export default function PostCard({ post }: { post: Post }) {
         </div>
       </div>
 
-      {/* ── Médias — ratio 4/5 pour tout ── */}
+      {/* ── Médias ── */}
       {post.medias.length > 0 && current && (
         <Link href={`/post/${post.id}`}>
           <div className="relative overflow-hidden bg-black rounded-sm shadow-[0_20px_50px_rgba(0,0,0,0.5)] aspect-[4/5] max-w-[420px]">
-            {/* Post payant → afficher l'aperçu avec overlay */}
+
+            {/* Post payant → aperçu muet + overlay de déverrouillage */}
             {isPaid && post.previewUrl ? (
               <>
                 {post.previewUrl.includes("/video/") || post.previewUrl.match(/\.(mp4|mov|webm)/) ? (
-                  <video src={post.previewUrl} playsInline muted className="w-full h-full object-cover"/>
+                  // Aperçu vidéo : balise native muette — les contrôles sont
+                  // inutiles sous l'overlay de paiement
+                  <video
+                    src={post.previewUrl}
+                    playsInline
+                    muted
+                    autoPlay
+                    loop
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
                   <img src={post.previewUrl} alt="" className="w-full h-full object-cover"/>
                 )}
                 <MediaWatermark postId={post.id}/>
+
                 {/* Overlay payant */}
                 <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3 z-20">
                   <div className="bg-black/60 rounded-2xl px-5 py-4 flex flex-col items-center gap-3 border border-white/10">
@@ -430,16 +439,27 @@ export default function PostCard({ post }: { post: Post }) {
             ) : (
               <>
                 {current.type === "VIDEO" ? (
-                  <video key={current.url} src={current.url} playsInline muted className="w-full h-full object-cover"/>
+                  // VideoPlayer custom — plein écran simulé (DOM), watermark intégré
+                  // fill={true} → occupe 100% du parent sans imposer son propre ratio
+                  // stopPropagation intégré dans VideoPlayer : le clic play/pause
+                  // ne déclenche pas la navigation du <Link>
+                  <VideoPlayer
+                    src={current.url}
+                    watermarkText={`@${post.user.username}`}
+                    fill
+                  />
                 ) : (
-                  <img src={current.url} alt={post.content} className="w-full h-full object-cover"/>
+                  <>
+                    <img src={current.url} alt={post.content} className="w-full h-full object-cover"/>
+                    <MediaWatermark postId={post.id}/>
+                  </>
                 )}
-                <MediaWatermark postId={post.id}/>
               </>
             )}
-            {/* Badge Réel — seulement si non payant */}
+
+            {/* Badge Réel */}
             {!isPaid && isReel && (
-              <div className="absolute top-3 left-3 bg-black/50 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
+              <div className="absolute top-3 left-3 bg-black/50 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1 z-10 pointer-events-none">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <rect x="2" y="2" width="20" height="20" rx="2"/>
                   <path d="M7 2v20M17 2v20M2 12h20"/>
@@ -453,30 +473,30 @@ export default function PostCard({ post }: { post: Post }) {
               <>
                 {mediaIndex > 0 && (
                   <button
-                    onClick={(e) => { e.preventDefault(); setMediaIndex((i) => i - 1); }}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white w-7 h-7 rounded-full flex items-center justify-center transition-colors"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMediaIndex((i) => i - 1); }}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white w-7 h-7 rounded-full flex items-center justify-center transition-colors z-10"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
                   </button>
                 )}
                 {mediaIndex < post.medias.length - 1 && (
                   <button
-                    onClick={(e) => { e.preventDefault(); setMediaIndex((i) => i + 1); }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white w-7 h-7 rounded-full flex items-center justify-center transition-colors"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMediaIndex((i) => i + 1); }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white w-7 h-7 rounded-full flex items-center justify-center transition-colors z-10"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
                   </button>
                 )}
-                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 z-10">
                   {post.medias.map((_, i) => (
                     <button
                       key={i}
-                      onClick={(e) => { e.preventDefault(); setMediaIndex(i); }}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMediaIndex(i); }}
                       className={`h-1.5 rounded-full transition-all ${i === mediaIndex ? "bg-white w-3" : "bg-white/40 w-1.5"}`}
                     />
                   ))}
                 </div>
-                <div className="absolute top-2 right-2 bg-black/50 text-white text-[10px] px-2 py-0.5 rounded-full">
+                <div className="absolute top-2 right-2 bg-black/50 text-white text-[10px] px-2 py-0.5 rounded-full z-10">
                   {mediaIndex + 1}/{post.medias.length}
                 </div>
               </>
@@ -487,7 +507,6 @@ export default function PostCard({ post }: { post: Post }) {
 
       {/* Actions : réactions à gauche, bookmark à droite */}
       <div className="flex items-center justify-between mt-3 px-1 max-w-[380px]">
-        {/* Groupe de boutons à gauche */}
         <div className="flex items-center gap-4">
           <button onClick={handleFire} className="flex items-center gap-1.5 hover:scale-110 transition-transform" title="J'adore">
             <span className={`text-lg leading-none transition-all duration-200 ${fired ? "" : "grayscale opacity-60"}`}>🔥</span>
@@ -515,7 +534,6 @@ export default function PostCard({ post }: { post: Post }) {
           </button>
         </div>
 
-        {/* Bouton sauvegarde à droite */}
         <div className="relative left-11">
           <button
             onClick={() => saved ? handleRemoveFromSaved() : handleSave()}
@@ -528,7 +546,6 @@ export default function PostCard({ post }: { post: Post }) {
             <IconBookmark filled={saved} />
           </button>
 
-          {/* Menu des collections */}
           {showCollectionMenu && collections.length > 0 && (
             <div className="absolute bottom-full right-0 mb-2 w-48 bg-[#2D1B3F] rounded-xl border border-white/10 shadow-xl py-2 z-50">
               <div className="px-3 py-2 text-white/50 text-xs border-b border-white/10">

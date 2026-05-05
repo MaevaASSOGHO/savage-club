@@ -8,6 +8,7 @@ import ProtectedMedia from "@/components/ProtectedMedia";
 import MediaWatermark from "@/components/MediaWatermark";
 import ReportButton from "@/components/ReportButton";
 import PaymentMethodSelector from "@/components/payments/PaymentMethodSelector";
+import VideoPlayer from "@/components/VideoPlayer";
 
 type Media = { id: string; url: string; type: string; order: number };
 type CommentUser = {
@@ -61,7 +62,11 @@ function VerifiedBadge({ size = 14 }: { size?: number }) {
 }
 
 // ── Partie gauche : média ─────────────────────────────────────────────────
-function MediaPanel({ medias, postId }: { medias: Media[]; postId?: string }) {
+function MediaPanel({ medias, postId, watermarkText }: {
+  medias: Media[];
+  postId?: string;
+  watermarkText?: string;
+}) {
   const [idx, setIdx] = useState(0);
   const current = medias[idx];
   
@@ -77,24 +82,25 @@ function MediaPanel({ medias, postId }: { medias: Media[]; postId?: string }) {
     `}>
       
       {current.type === "VIDEO" ? (
-        <video
+        // VideoPlayer custom — plein écran simulé (DOM), watermark intégré
+        // fill={true} → occupe 100% du parent sans imposer son propre ratio
+        <VideoPlayer
           key={current.url}
           src={current.url}
-          controls
-          playsInline
+          watermarkText={watermarkText}
+          fill
           autoPlay
-          className={`w-full h-full ${isReel ? "object-cover" : "object-contain"}`}
         />
       ) : (
-        <img
-          src={current.url}
-          alt=""
-          className="w-full h-full object-contain"
-        />
+        <>
+          <img
+            src={current.url}
+            alt=""
+            className="w-full h-full object-contain"
+          />
+          {postId && <MediaWatermark postId={postId} />}
+        </>
       )}
-
-      {/* ✅ SAFE WATERMARK */}
-      {postId && <MediaWatermark postId={postId} />}    
 
       {isReel && (
         <div className="absolute top-3 left-3 bg-black/50 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
@@ -228,7 +234,7 @@ export default function PostDetail({ post, viewerLiked, viewerSaved, viewerId, p
         {/* Colonne gauche — média */}
         <div className={`flex-shrink-0 bg-black flex items-center justify-center relative ${isReel ? "w-[380px]" : "w-[520px]"}`}>
           {unlocked ? (
-            <MediaPanel medias={post.medias} postId={post.id} />
+            <MediaPanel medias={post.medias} postId={post.id} watermarkText={`@${post.user.username}`} />
           ) : post.previewUrl ? (
             <div className="relative w-full h-full flex items-center justify-center">
               {post.previewUrl.includes("/video/") ? (
@@ -574,7 +580,7 @@ export default function PostDetail({ post, viewerLiked, viewerSaved, viewerId, p
         {/* Média plein écran */}
         <div className="flex-shrink-0 relative">
           {unlocked ? (
-            <MediaPanel medias={post.medias} postId={post.id} />
+            <MediaPanel medias={post.medias} postId={post.id} watermarkText={`@${post.user.username}`} />
           ) : post.previewUrl ? (
             <div className="relative aspect-[4/5]">
               {post.previewUrl.includes("/video/") ? (

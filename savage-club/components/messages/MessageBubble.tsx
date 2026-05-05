@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useEffect } from "react";
 import Avatar from "./Avatar";
 import { formatTime, type Message } from "./types";
+import VideoPlayer from "@/components/VideoPlayer";
 
 // ── Watermark pour les médias des messages ─────────────────────────────────
 function MessageWatermark({ msgId }: { msgId: string }) {
@@ -163,22 +164,15 @@ export default function MessageBubble({
                 </div>
               )}
 
-              {/* Vidéo avec watermark */}
+              {/* Vidéo avec VideoPlayer custom — watermark intégré, plein écran simulé */}
               {msg.mediaUrl && msg.mediaType === "VIDEO" && (
-                <div
-                  className="relative rounded-2xl overflow-hidden"
-                  style={{ userSelect: "none", WebkitUserSelect: "none" }}
-                >
-                  <video
-                    src={msg.mediaUrl}
-                    controls
-                    className="rounded-2xl max-h-56"
-                    // controlsList="nodownload"
-                    controlsList="nodownload nofullscreen"
-                    onContextMenu={(e) => e.preventDefault()}
-                  />
-                  <MessageWatermark msgId={msg.id}/>
-                </div>
+                <VideoPlayer
+                  src={msg.mediaUrl}
+                  watermarkText={msg.sender ? `@${msg.sender.username}` : undefined}
+                  aspectRatio="16/9"
+                  className="rounded-2xl overflow-hidden"
+                  style={{ maxWidth: 280 } as React.CSSProperties}
+                />
               )}
 
               {/* Document */}

@@ -237,7 +237,7 @@ wss.on("connection", (ws, req) => {
     let msg;
     try { msg = JSON.parse(rawData.toString()); } catch { return; }
 
-    const allowed = ["offer", "answer", "ice-candidate", "call-ended"];
+    const allowed = ["offer", "answer", "ice-candidate", "call-ended", "timer:start", "timer:end"];
     if (!allowed.includes(msg.type)) return;
 
     if (msg.type === "call-ended") {
