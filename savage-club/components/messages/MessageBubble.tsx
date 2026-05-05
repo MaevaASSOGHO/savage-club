@@ -172,8 +172,9 @@ export default function MessageBubble({
               {/* Vidéo avec VideoPlayer custom — watermark intégré, plein écran simulé */}
               {msg.mediaUrl && msg.mediaType === "VIDEO" && (
                 // Wrapper à hauteur fixe : VideoPlayer (fill) s'y adapte.
-                // 16/9 à 340px → 191px de haut. Sur petit écran (85vw=306px) → 172px.
-                // Beaucoup plus lisible que le padding-bottom contraint par max-w-[70%].
+                // MessageWatermark reste en overlay en mode normal.
+                // En plein écran simulé (VideoPlayer fixed), c'est watermarkText
+                // qui prend le relais (il est dans le DOM fixé).
                 <div
                   className="relative w-full rounded-2xl overflow-hidden bg-black"
                   style={{ aspectRatio: "16/9", minHeight: 160 }}
@@ -183,6 +184,7 @@ export default function MessageBubble({
                     watermarkText={msg.sender ? `@${msg.sender.username}` : undefined}
                     fill
                   />
+                  <MessageWatermark msgId={msg.id}/>
                 </div>
               )}
 
