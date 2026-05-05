@@ -27,7 +27,7 @@ type Media = {
 type Post = {
   id: string;
   content: string;
-  createdAt: string;
+  createdAt: string | Date;
   price?: number | null;
   previewUrl?: string | null;
   medias: Media[];
@@ -106,20 +106,19 @@ function VerifiedBadge({ size = 15 }: { size?: number }) {
 // < 24 h      → "il y a X h"
 // < 7 jours   → "il y a X jours"
 // ≥ 7 jours   → date complète "12 janv. 2025"
-function formatPostDate(dateStr: string): string {
-  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+function formatPostDate(dateStr: string | Date): string {
+  const date = new Date(dateStr);
+  const diff = (Date.now() - date.getTime()) / 1000;
 
   if (diff < 60)          return "à l'instant";
   if (diff < 3600)        return `il y a ${Math.floor(diff / 60)} min`;
   if (diff < 86400)       return `il y a ${Math.floor(diff / 3600)} h`;
   if (diff < 7 * 86400)   return `il y a ${Math.floor(diff / 86400)} j`;
 
-  return new Date(dateStr).toLocaleDateString("fr-FR", {
+  return date.toLocaleDateString("fr-FR", {
     day:   "numeric",
     month: "short",
-    year:  new Date(dateStr).getFullYear() !== new Date().getFullYear()
-             ? "numeric"
-             : undefined,
+    year:  date.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
   });
 }
 
