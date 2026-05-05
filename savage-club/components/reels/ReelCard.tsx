@@ -390,15 +390,15 @@ export default function ReelCard({
               </div>
 
               {/* Bouton Suivre - style border amber avec disparition si déjà suivi */}
-{session?.user?.id !== post.user.id && !isFollowing && (
-  <button
-    onClick={handleFollow}
-    disabled={followingLoading}
-    className="ml-2 px-3 py-1 rounded-full text-xs font-bold text-amber-500 border border-amber-500 hover:bg-white/20 transition-all"
-  >
-    {followingLoading ? "..." : "Suivre"}
-  </button>
-)}
+              {session?.user?.id !== post.user.id && !isFollowing && (
+                <button
+                  onClick={handleFollow}
+                  disabled={followingLoading}
+                  className="ml-2 px-3 py-1 rounded-full text-xs font-bold text-amber-500 border border-amber-500 hover:bg-white/20 transition-all"
+                >
+                  {followingLoading ? "..." : "Suivre"}
+                </button>
+              )}
             </div>
 
             {/* Description avec bouton "plus" */}
