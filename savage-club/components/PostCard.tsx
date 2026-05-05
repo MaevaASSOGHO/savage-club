@@ -27,6 +27,7 @@ type Media = {
 type Post = {
   id: string;
   content: string;
+  createdAt: string;
   price?: number | null;
   previewUrl?: string | null;
   medias: Media[];
@@ -39,7 +40,6 @@ type Post = {
   };
   likes: { id: string }[];
   comments: { id: string }[];
-  createdAt: string;
 };
 
 type Collection = {
