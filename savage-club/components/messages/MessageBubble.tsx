@@ -120,7 +120,12 @@ export default function MessageBubble({
       <div className={`flex items-end gap-2 group ${isMine ? "flex-row-reverse" : ""}`}>
         {!isMine && msg.sender && <Avatar user={msg.sender} size="7"/>}
 
-        <div className={`max-w-[70%] flex flex-col gap-1 ${isMine ? "items-end" : "items-start"}`}>
+        {/* Bulle plus large quand elle contient une vidéo */}
+        <div className={`flex flex-col gap-1 ${
+          !msg.locked && msg.mediaUrl && msg.mediaType === "VIDEO"
+            ? "w-[85vw] max-w-[340px]"
+            : "max-w-[70%]"
+        } ${isMine ? "items-end" : "items-start"}`}>
 
           {/* Contenu verrouillé */}
           {msg.locked ? (
@@ -166,13 +171,19 @@ export default function MessageBubble({
 
               {/* Vidéo avec VideoPlayer custom — watermark intégré, plein écran simulé */}
               {msg.mediaUrl && msg.mediaType === "VIDEO" && (
-                <VideoPlayer
-                  src={msg.mediaUrl}
-                  watermarkText={msg.sender ? `@${msg.sender.username}` : undefined}
-                  aspectRatio="16/9"
-                  className="rounded-2xl overflow-hidden"
-                  style={{ maxWidth: 280 } as React.CSSProperties}
-                />
+                // Wrapper à hauteur fixe : VideoPlayer (fill) s'y adapte.
+                // 16/9 à 340px → 191px de haut. Sur petit écran (85vw=306px) → 172px.
+                // Beaucoup plus lisible que le padding-bottom contraint par max-w-[70%].
+                <div
+                  className="relative w-full rounded-2xl overflow-hidden bg-black"
+                  style={{ aspectRatio: "16/9", minHeight: 160 }}
+                >
+                  <VideoPlayer
+                    src={msg.mediaUrl}
+                    watermarkText={msg.sender ? `@${msg.sender.username}` : undefined}
+                    fill
+                  />
+                </div>
               )}
 
               {/* Document */}
