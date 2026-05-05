@@ -39,6 +39,7 @@ type Post = {
   };
   likes: { id: string }[];
   comments: { id: string }[];
+  createdAt: string;
 };
 
 type Collection = {
@@ -97,6 +98,29 @@ function VerifiedBadge({ size = 15 }: { size?: number }) {
       </svg>
     </span>
   );
+}
+
+// Même comportement qu'Instagram :
+// < 1 min     → "à l'instant"
+// < 1 h       → "il y a X min"
+// < 24 h      → "il y a X h"
+// < 7 jours   → "il y a X jours"
+// ≥ 7 jours   → date complète "12 janv. 2025"
+function formatPostDate(dateStr: string): string {
+  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+
+  if (diff < 60)          return "à l'instant";
+  if (diff < 3600)        return `il y a ${Math.floor(diff / 60)} min`;
+  if (diff < 86400)       return `il y a ${Math.floor(diff / 3600)} h`;
+  if (diff < 7 * 86400)   return `il y a ${Math.floor(diff / 86400)} j`;
+
+  return new Date(dateStr).toLocaleDateString("fr-FR", {
+    day:   "numeric",
+    month: "short",
+    year:  new Date(dateStr).getFullYear() !== new Date().getFullYear()
+             ? "numeric"
+             : undefined,
+  });
 }
 
 export default function PostCard({ post }: { post: Post }) {
@@ -582,6 +606,7 @@ export default function PostCard({ post }: { post: Post }) {
         {post.user.isVerified && <VerifiedBadge size={14} />}
         <span className="text-white/70 text-sm">{post.content}</span>
       </div>
+      <p className="text-white/30 text-xs px-1 mt-1">{formatPostDate(post.createdAt)}</p>
 
       {/* Commentaires */}
       {showComments && (
