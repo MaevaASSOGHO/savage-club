@@ -5,9 +5,8 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import ProtectedMedia from "@/components/ProtectedMedia";
-// MediaWatermark replaced by Cloudinary URL transforms
+import MediaWatermark from "@/components/MediaWatermark";
 import ReportButton from "@/components/ReportButton";
-import { addCloudinaryWatermark, addCloudinaryVideoWatermark } from "@/lib/cloudinary-watermark";
 
 
 type Comment = {
@@ -127,7 +126,6 @@ export default function PostCard({ post }: { post: Post }) {
   const [submitting, setSubmitting] = useState(false);
 
   const { data: session } = useSession();
-  const viewerUsername = (session?.user?.name ?? session?.user?.email ?? "user").split("@")[0];
   const [isFollowing, setIsFollowing] = useState(false);
   const [followingLoading, setFollowingLoading] = useState(false);
 
@@ -394,11 +392,11 @@ export default function PostCard({ post }: { post: Post }) {
             {isPaid && post.previewUrl ? (
               <>
                 {post.previewUrl.includes("/video/") || post.previewUrl.match(/\.(mp4|mov|webm)/) ? (
-                  <video src={addCloudinaryVideoWatermark(post.previewUrl!, viewerUsername)} playsInline muted className="w-full h-full object-cover"/>
+                  <video src={post.previewUrl} playsInline muted className="w-full h-full object-cover"/>
                 ) : (
-                  <img src={addCloudinaryWatermark(post.previewUrl!, viewerUsername)} alt="" className="w-full h-full object-cover"/>
+                  <img src={post.previewUrl} alt="" className="w-full h-full object-cover"/>
                 )}
-                
+                <MediaWatermark postId={post.id}/>
                 {/* Overlay payant */}
                 <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3 z-20">
                   <div className="bg-black/60 rounded-2xl px-5 py-4 flex flex-col items-center gap-3 border border-white/10">
@@ -432,11 +430,11 @@ export default function PostCard({ post }: { post: Post }) {
             ) : (
               <>
                 {current.type === "VIDEO" ? (
-                  <video key={current.url} src={addCloudinaryVideoWatermark(current.url, viewerUsername)} playsInline muted className="w-full h-full object-cover"/>
+                  <video key={current.url} src={current.url} playsInline muted className="w-full h-full object-cover"/>
                 ) : (
-                  <img src={addCloudinaryWatermark(current.url, viewerUsername)} alt={post.content} className="w-full h-full object-cover"/>
+                  <img src={current.url} alt={post.content} className="w-full h-full object-cover"/>
                 )}
-                
+                <MediaWatermark postId={post.id}/>
               </>
             )}
             {/* Badge Réel — seulement si non payant */}
@@ -635,7 +633,7 @@ export default function PostCard({ post }: { post: Post }) {
                 ) : (
                   <img src={post.previewUrl} alt="" className="w-full h-full object-cover" draggable={false} onContextMenu={(e) => e.preventDefault()}/>
                 )}
-                
+                <MediaWatermark postId={post.id}/>
               </div>
               <div className="p-4 space-y-3">
                 <p className="text-white font-bold text-center">Aperçu — {post.price?.toLocaleString("fr-FR")} FCFA pour le contenu complet</p>
