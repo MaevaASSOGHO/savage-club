@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import ReportButton from "@/components/ReportButton";
 import { FormattedReel } from "@/types/reel";
+import ReelWatermark from "./ReelWatermark";
 
 type Comment = {
   id: string;
@@ -285,6 +286,9 @@ export default function ReelCard({
               className="w-full h-full object-cover"
             />
           )}
+
+          {/* Watermark spectateur — token rotatif, identité du viewer */}
+          <ReelWatermark reelId={post.id} />
 
           {/* Overlay gradient pour lisibilité */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 pointer-events-none" />
