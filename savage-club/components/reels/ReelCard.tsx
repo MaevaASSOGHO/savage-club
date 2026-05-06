@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import ReportButton from "@/components/ReportButton";
 import { FormattedReel } from "@/types/reel";
 import ReelWatermark from "./ReelWatermark";
+import SubscribeModal from "@/components/profile/SubscribeModal";
 
 type Comment = {
   id: string;
@@ -121,8 +122,8 @@ export default function ReelCard({
   const [commentText, setCommentText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showFullCaption, setShowFullCaption] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [followingLoading, setFollowingLoading] = useState(false);
+  const [subscribeModalOpen, setSubscribeModalOpen] = useState(false);
+  const [currentTier, setCurrentTier] = useState<"NONE" | "FREE" | "SAVAGE" | "VIP">("NONE");
 
   // Réactions
   const [fired, setFired] = useState(false);
@@ -135,22 +136,13 @@ export default function ReelCard({
   const caption = post.content || "";
   const captionShort = caption.length > 80 ? caption.slice(0, 80) + "..." : caption;
 
-  // Vérifier si l'utilisateur suit déjà
+  // Charger le tier d'abonnement au créateur
   useEffect(() => {
-    const checkSubscription = async () => {
-      if (!session?.user?.id) return;
-      try {
-        const res = await fetch(`/api/subscriptions?creatorId=${post.user.id}`);
-        if (res.ok) {
-          const data = await res.json();
-          // Si l'utilisateur a un abonnement actif, on considère qu'il "suit"
-          setIsFollowing(!!data.sub && data.sub.status === "ACTIVE");
-        }
-      } catch (error) {
-        console.error("Erreur vérification abonnement:", error);
-      }
-    };
-    checkSubscription();
+    if (!session?.user?.id) return;
+    fetch(`/api/subscriptions?creatorId=${post.user.id}`)
+      .then((r) => r.json())
+      .then((data) => setCurrentTier(data.tier ?? "NONE"))
+      .catch(() => {});
   }, [session, post.user.id]);
 
   // Charger l'état des réactions
@@ -211,41 +203,6 @@ export default function ReelCard({
     await navigator.clipboard.writeText(`${window.location.origin}/post/${post.id}`);
   }
 
-  async function handleFollow() {
-    if (!session) return router.push("/auth");
-    setFollowingLoading(true);
-    
-    try {
-      if (isFollowing) {
-        // Se désabonner
-        const res = await fetch(`/api/subscriptions?creatorId=${post.user.id}`, {
-          method: "DELETE",
-        });
-        if (res.ok) {
-          setIsFollowing(false);
-        }
-      } else {
-        // S'abonner (tier FREE par défaut)
-        const res = await fetch("/api/subscriptions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            creatorId: post.user.id,
-            tier: "FREE",
-            amount: 0,
-          }),
-        });
-        if (res.ok) {
-          setIsFollowing(true);
-        }
-      }
-    } catch (error) {
-      console.error("Erreur follow:", error);
-    } finally {
-      setFollowingLoading(false);
-    }
-  }
-
   async function submitComment() {
     if (!session) return router.push("/auth");
     if (!commentText.trim() || submitting) return;
@@ -287,7 +244,7 @@ export default function ReelCard({
             />
           )}
 
-          {/* Watermark spectateur — token rotatif, identité du viewer */}
+          {/* Watermark spectateur */}
           <ReelWatermark reelId={post.id} />
 
           {/* Overlay gradient pour lisibilité */}
@@ -393,14 +350,19 @@ export default function ReelCard({
                 {post.user.isVerified && <VerifiedBadge />}
               </div>
 
-              {/* Bouton Suivre - style border amber avec disparition si déjà suivi */}
-              {session?.user?.id !== post.user.id && !isFollowing && (
+              {/* Bouton S'abonner — ouvre SubscribeModal, affiche le tier actuel */}
+              {session?.user?.id !== post.user.id && (
                 <button
-                  onClick={handleFollow}
-                  disabled={followingLoading}
-                  className="ml-2 px-3 py-1 rounded-full text-xs font-bold text-amber-500 border border-amber-500 hover:bg-white/20 transition-all"
+                  onClick={() => setSubscribeModalOpen(true)}
+                  className={`ml-2 px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                    currentTier === "NONE"
+                      ? "text-amber-500 border border-amber-500 hover:bg-white/20"
+                      : "text-white/40 border border-white/20 hover:bg-white/10"
+                  }`}
                 >
-                  {followingLoading ? "..." : "Suivre"}
+                  {currentTier === "NONE"  ? "S'abonner" :
+                   currentTier === "FREE"  ? "✓ Abonné"  :
+                   currentTier === "VIP"   ? "✓ VIP"     : "✓ Savage"}
                 </button>
               )}
             </div>
@@ -496,6 +458,21 @@ export default function ReelCard({
           animation: slide-up 0.3s ease-out;
         }
       `}</style>
+
+      {/* Modal d'abonnement */}
+      {subscribeModalOpen && (
+        <SubscribeModal
+          username={post.user.username}
+          displayName={post.user.displayName ?? null}
+          avatar={post.user.avatar}
+          creatorId={post.user.id}
+          savagePrice={(post.user as any).subscriptionPrice ?? null}
+          vipPrice={(post.user as any).subscriptionVIP ?? null}
+          currentTier={currentTier}
+          onClose={() => setSubscribeModalOpen(false)}
+          onSuccess={(newTier) => setCurrentTier(newTier)}
+        />
+      )}
     </div>
   );
 }
