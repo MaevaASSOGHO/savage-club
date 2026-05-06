@@ -5,24 +5,7 @@ bash npx prisma studio
 
 👉 Architecture → Données → API → Composants → UI
 
-prisma:query SELECT 1
-prisma:query SELECT "public"."Reel"."id", "public"."Reel"."videoUrl", "public"."Reel"."thumbnail", "public"."Reel"."caption", "public"."Reel"."duration", "public"."Reel"."userId", "public"."Reel"."createdAt" FROM "public"."Reel" WHERE 1=1 ORDER BY "public"."Reel"."createdAt" DESC LIMIT $1 OFFSET $2
- GET /api/reels 200 in 440ms (compile: 57ms, render: 383ms)
-prisma:query SELECT "public"."Reel"."id", "public"."Reel"."videoUrl", "public"."Reel"."thumbnail", "public"."Reel"."caption", "public"."Reel"."duration", "public"."Reel"."userId", "public"."Reel"."createdAt" FROM "public"."Reel" WHERE 1=1 ORDER BY "public"."Reel"."createdAt" DESC LIMIT $1 OFFSET $2
- GET /api/reels 200 in 6ms (compile: 1538µs, render: 5ms)
 
-Request URL
-http://localhost:3000/api/reels
-Request method
-GET
-Status code
-200 OK
-Remote address
-[::1]:3000
-Referrer policy
-strict-origin-when-cross-origin
-
-la table Reel 0 enregistrement
 
 dynamisons tout ça 
 
@@ -183,18 +166,3 @@ npx prisma db pull
 npx prisma generate
 
 
-curl -X POST https://api.resend.com/emails \
-
-  -H "Authorization: Bearer re_Zqdv7DsD_LTBNRqe1P87iEDwMtxkEYzJx" \
-
-  -H "Content-Type: application/json" \
-
-  -d '{"from":"onboarding@resend.dev","to":"tabouretgangbusiness@gmail.com","subject":"Test","html":"<p>Test</p>"}'
-
-
-  {/* Texte */}
-{msg.content && msg.mediaType !== "DOCUMENT" && (
-  <div className={`px-4 py-2.5 rounded-2xl ...`}>
-    {msg.content}
-  </div>
-)}
