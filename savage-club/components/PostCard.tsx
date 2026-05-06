@@ -8,7 +8,7 @@ import ProtectedMedia from "@/components/ProtectedMedia";
 import MediaWatermark from "@/components/MediaWatermark";
 import ReportButton from "@/components/ReportButton";
 import VideoPlayer from "@/components/VideoPlayer";
-
+import SubscribeModal from "@/components/profile/SubscribeModal";
 
 type Comment = {
   id: string;
@@ -37,6 +37,8 @@ type Post = {
     displayName?: string | null;
     avatar: string | null;
     isVerified: boolean;
+    subscriptionPrice?: number | null;
+    subscriptionVIP?: number | null;
   };
   likes: { id: string }[];
   comments: { id: string }[];
@@ -100,12 +102,6 @@ function VerifiedBadge({ size = 15 }: { size?: number }) {
   );
 }
 
-// Même comportement qu'Instagram :
-// < 1 min     → "à l'instant"
-// < 1 h       → "il y a X min"
-// < 24 h      → "il y a X h"
-// < 7 jours   → "il y a X jours"
-// ≥ 7 jours   → date complète "12 janv. 2025"
 function formatPostDate(dateStr: string | Date): string {
   const date = new Date(dateStr);
   const diff = (Date.now() - date.getTime()) / 1000;
@@ -149,11 +145,13 @@ export default function PostCard({ post }: { post: Post }) {
   const [commentText, setCommentText] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const { data: session } = useSession();
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [followingLoading, setFollowingLoading] = useState(false);
+  // Abonnement
+  const [subscribeModalOpen, setSubscribeModalOpen] = useState(false);
+  const [currentTier, setCurrentTier] = useState<"NONE" | "FREE" | "SAVAGE" | "VIP">("NONE");
 
+  const { data: session } = useSession();
   const { status } = useSession();
+
   useEffect(() => {
     if (status !== "authenticated") return;
     fetch("/api/collections")
@@ -161,6 +159,15 @@ export default function PostCard({ post }: { post: Post }) {
       .then((data) => setCollections(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, [status]);
+
+  // Charger le tier d'abonnement au créateur
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    fetch(`/api/subscriptions?creatorId=${post.user.id}`)
+      .then((r) => r.json())
+      .then((data) => setCurrentTier(data.tier ?? "NONE"))
+      .catch(() => {});
+  }, [session, post.user.id]);
 
   // Charger les réactions
   useEffect(() => {
@@ -203,45 +210,6 @@ export default function PostCard({ post }: { post: Post }) {
       })
       .finally(() => setLoadingComments(false));
   }, [showComments, post.id]);
-
-  // Charger l'état de suivi
-  useEffect(() => {
-    if (!session?.user?.id) return;
-    
-    const checkFollow = async () => {
-      try {
-        const res = await fetch(`/api/follow/status?userId=${post.user.id}`);
-        if (res.ok) {
-          const data = await res.json();
-          setIsFollowing(data.isFollowing);
-        }
-      } catch (error) {
-        console.error("Erreur vérification follow:", error);
-      }
-    };
-    checkFollow();
-  }, [session, post.user.id]);
-
-  async function handleFollow() {
-    if (!session) return;
-    setFollowingLoading(true);
-    
-    try {
-      const res = await fetch(`/api/follow/${post.user.id}`, {
-        method: "POST",
-      });
-      
-      if (res.ok) {
-        setIsFollowing(true);
-      } else {
-        console.error("Erreur follow:", await res.text());
-      }
-    } catch (error) {
-      console.error("Erreur follow:", error);
-    } finally {
-      setFollowingLoading(false);
-    }
-  }
 
   async function handleFire() {
     const next = !fired;
@@ -388,14 +356,20 @@ export default function PostCard({ post }: { post: Post }) {
             {post.user.displayName ?? post.user.username}
           </Link>
           {post.user.isVerified && <VerifiedBadge />}
-          
-          {session?.user?.id !== post.user.id && !isFollowing && (
+
+          {/* Bouton S'abonner — ouvre SubscribeModal, affiche le tier actuel */}
+          {session?.user?.id !== post.user.id && (
             <button
-              onClick={handleFollow}
-              disabled={followingLoading}
-              className="ml-5 px-2 py-0.5 rounded-full text-[10px] font-bold text-amber-500 border border-amber-500 hover:bg-white/20 transition-all"
+              onClick={() => setSubscribeModalOpen(true)}
+              className={`ml-5 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+                currentTier === "NONE"
+                  ? "text-amber-500 border border-amber-500 hover:bg-white/20"
+                  : "text-white/40 border border-white/20 hover:bg-white/10"
+              }`}
             >
-              {followingLoading ? "..." : "Suivre"}
+              {currentTier === "NONE"    ? "S'abonner"  :
+               currentTier === "FREE"    ? "✓ Abonné"   :
+               currentTier === "VIP"     ? "✓ VIP"      : "✓ Savage"}
             </button>
           )}
         </div>
@@ -410,26 +384,14 @@ export default function PostCard({ post }: { post: Post }) {
         <Link href={`/post/${post.id}`}>
           <div className="relative overflow-hidden bg-black rounded-sm shadow-[0_20px_50px_rgba(0,0,0,0.5)] aspect-[4/5] max-w-[420px]">
 
-            {/* Post payant → aperçu muet + overlay de déverrouillage */}
             {isPaid && post.previewUrl ? (
               <>
                 {post.previewUrl.includes("/video/") || post.previewUrl.match(/\.(mp4|mov|webm)/) ? (
-                  // Aperçu vidéo : balise native muette — les contrôles sont
-                  // inutiles sous l'overlay de paiement
-                  <video
-                    src={post.previewUrl}
-                    playsInline
-                    muted
-                    autoPlay
-                    loop
-                    className="w-full h-full object-cover"
-                  />
+                  <video src={post.previewUrl} playsInline muted autoPlay loop className="w-full h-full object-cover"/>
                 ) : (
                   <img src={post.previewUrl} alt="" className="w-full h-full object-cover"/>
                 )}
                 <MediaWatermark postId={post.id}/>
-
-                {/* Overlay payant */}
                 <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3 z-20">
                   <div className="bg-black/60 rounded-2xl px-5 py-4 flex flex-col items-center gap-3 border border-white/10">
                     <div className="flex items-center gap-2">
@@ -462,15 +424,7 @@ export default function PostCard({ post }: { post: Post }) {
             ) : (
               <>
                 {current.type === "VIDEO" ? (
-                  // VideoPlayer custom — plein écran simulé (DOM), watermark intégré
-                  // fill={true} → occupe 100% du parent sans imposer son propre ratio
-                  // stopPropagation intégré dans VideoPlayer : le clic play/pause
-                  // ne déclenche pas la navigation du <Link>
-                  <VideoPlayer
-                    src={current.url}
-                    postId={post.id}
-                    fill
-                  />
+                  <VideoPlayer src={current.url} postId={post.id} fill />
                 ) : (
                   <>
                     <img src={current.url} alt={post.content} className="w-full h-full object-cover"/>
@@ -480,7 +434,6 @@ export default function PostCard({ post }: { post: Post }) {
               </>
             )}
 
-            {/* Badge Réel */}
             {!isPaid && isReel && (
               <div className="absolute top-3 left-3 bg-black/50 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1 z-10 pointer-events-none">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -491,7 +444,6 @@ export default function PostCard({ post }: { post: Post }) {
               </div>
             )}
 
-            {/* Carousel controls */}
             {isCarousel && (
               <>
                 {mediaIndex > 0 && (
@@ -528,7 +480,7 @@ export default function PostCard({ post }: { post: Post }) {
         </Link>
       )}
 
-      {/* Actions : réactions à gauche, bookmark à droite */}
+      {/* Actions */}
       <div className="flex items-center justify-between mt-3 px-1 max-w-[380px]">
         <div className="flex items-center gap-4">
           <button onClick={handleFire} className="flex items-center gap-1.5 hover:scale-110 transition-transform" title="J'adore">
@@ -562,9 +514,7 @@ export default function PostCard({ post }: { post: Post }) {
             onClick={() => saved ? handleRemoveFromSaved() : handleSave()}
             disabled={savingLoading}
             title={saved ? "Retirer de ma liste" : "Sauvegarder"}
-            className={`hover:scale-110 transition-all duration-200 ${
-              saved ? "text-amber-400" : "text-white/50 hover:text-white/80"
-            }`}
+            className={`hover:scale-110 transition-all duration-200 ${saved ? "text-amber-400" : "text-white/50 hover:text-white/80"}`}
           >
             <IconBookmark filled={saved} />
           </button>
@@ -690,6 +640,21 @@ export default function PostCard({ post }: { post: Post }) {
             </div>
           </div>
         </>
+      )}
+
+      {/* Modal d'abonnement */}
+      {subscribeModalOpen && (
+        <SubscribeModal
+          username={post.user.username}
+          displayName={post.user.displayName ?? null}
+          avatar={post.user.avatar}
+          creatorId={post.user.id}
+          savagePrice={post.user.subscriptionPrice ?? null}
+          vipPrice={post.user.subscriptionVIP ?? null}
+          currentTier={currentTier}
+          onClose={() => setSubscribeModalOpen(false)}
+          onSuccess={(newTier) => setCurrentTier(newTier)}
+        />
       )}
     </div>
   );

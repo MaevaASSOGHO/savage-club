@@ -36,8 +36,13 @@ export default async function HomePage() {
     include: {
       User: {
         select: {
-          id: true, username: true, displayName: true,
-          avatar: true, isVerified: true,
+          id: true,
+          username: true,
+          displayName: true,
+          avatar: true,
+          isVerified: true,
+          subscriptionPrice: true,  // ← nécessaire pour SubscribeModal
+          subscriptionVIP: true,     // ← nécessaire pour SubscribeModal
         },
       },
       PostMedia: { orderBy: { order: "asc" } },
@@ -62,7 +67,7 @@ export default async function HomePage() {
               post={{
                 id:         post.id,
                 content:    post.content ?? "",
-                createdAt:  post.createdAt,
+                createdAt:  post.createdAt.toISOString(),
                 price:      post.price,
                 previewUrl: post.previewUrl,
                 medias:     post.PostMedia,
@@ -74,6 +79,8 @@ export default async function HomePage() {
                   displayName: post.User.displayName,
                   avatar:      post.User.avatar,
                   isVerified:  post.User.isVerified,
+                  subscriptionPrice: post.User.subscriptionPrice,
+                  subscriptionVIP: post.User.subscriptionVIP,
                 },
               }}
             />
