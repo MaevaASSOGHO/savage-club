@@ -62,7 +62,7 @@ export default async function HomePage() {
               post={{
                 id:         post.id,
                 content:    post.content ?? "",
-                createdAt:  post.createdAt.toISOString(),
+                createdAt:  post.createdAt,
                 price:      post.price,
                 previewUrl: post.previewUrl,
                 medias:     post.PostMedia,

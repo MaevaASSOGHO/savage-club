@@ -2,7 +2,7 @@
 // components/reels/ReelPlayer.tsx
 import Link from "next/link";
 import ReelActions from "./ReelActions";
-import MediaWatermark from "@/components/MediaWatermark";
+import ReelWatermark from "./ReelWatermark";
 
 type Reel = {
   id: string;
@@ -30,8 +30,8 @@ export default function ReelPlayer({ reel }: { reel: Reel }) {
         playsInline
       />
 
-      {/* Watermark spectateur — même logique que sur les posts */}
-      <MediaWatermark postId={reel.id} />
+      {/* Watermark spectateur — token généré sans insert Post en DB */}
+      <ReelWatermark reelId={reel.id} />
 
       {/* Info utilisateur */}
       <div className="absolute bottom-10 left-5 text-white max-w-[70%] z-10">
