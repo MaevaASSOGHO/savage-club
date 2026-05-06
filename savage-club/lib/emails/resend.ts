@@ -1,7 +1,7 @@
 // lib/emails/resend.ts
 import { Resend } from "resend";
 
-const resend  = new Resend(process.env.RESEND_API_KEY);
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
 const FROM    = "Bettie de Savage Club <onboarding@resend.dev>"; // ← remplacer par ton domaine vérifié
 const APP_URL = process.env.NEXTAUTH_URL || "https://savage-club.vercel.app";
 
@@ -9,7 +9,7 @@ const APP_URL = process.env.NEXTAUTH_URL || "https://savage-club.vercel.app";
 export async function sendResetPasswordEmail(email: string, token: string) {
   const resetLink = `${APP_URL}/auth/reset-password/${token}`;
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from:    FROM,
     to:      email,
     subject: "Réinitialisation de votre mot de passe — Savage Club",
@@ -53,7 +53,7 @@ export async function sendBookingConfirmationEmail(
 ) {
   const typeLabel = type === "AUDIO_CALL" ? "appel audio 🎙️" : "appel vidéo 📹";
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from:    FROM,
     to:      email,
     subject: `Votre ${typeLabel} avec ${creatorName} est confirmé — Savage Club`,
@@ -87,7 +87,7 @@ export async function sendBookingConfirmationEmail(
 
 // ── Notification de vérification d'identité ───────────────────────────────
 export async function sendIdentityVerifiedEmail(email: string, name: string) {
-  await resend.emails.send({
+  await getResend().emails.send({
     from:    FROM,
     to:      email,
     subject: "Votre identité a été vérifiée ✓ — Savage Club",
@@ -120,7 +120,7 @@ export async function sendIdentityVerifiedEmail(email: string, name: string) {
 
 // ── Rejet de vérification d'identité ──────────────────────────────────────
 export async function sendIdentityRejectedEmail(email: string, name: string, reason: string) {
-  await resend.emails.send({
+  await getResend().emails.send({
     from:    FROM,
     to:      email,
     subject: "Votre demande de vérification — Savage Club",
@@ -168,7 +168,7 @@ export async function sendPaymentConfirmationEmail(
   };
   const label = typeLabels[type] ?? "service";
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from:    FROM,
     to:      payerEmail,
     subject: `Paiement confirmé — Savage Club`,
