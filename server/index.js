@@ -216,7 +216,10 @@ app.post("/payments/moneyfusion/payout", async (req, res) => {
       }),
     });
 
-    const data = await response.json();
+    const text = await response.text();
+    console.log("[MF Payout] Status:", response.status);
+    console.log("[MF Payout] Raw response:", text.slice(0, 200));
+    const data = JSON.parse(text);
     console.log("[MF Payout] Réponse:", JSON.stringify(data));
     return res.json(data);
 
