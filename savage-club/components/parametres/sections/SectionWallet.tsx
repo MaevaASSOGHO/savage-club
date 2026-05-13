@@ -32,15 +32,33 @@ type WalletData = {
   canWithdraw:    boolean;
 };
 
-// Opérateurs par pays
 const OPERATORS = [
-  { value: "orange-money-ci", label: "Orange Money CI",  country: "ci" },
-  { value: "mtn-ci",          label: "MTN MoMo CI",      country: "ci" },
-  { value: "moov-ci",         label: "Moov Money CI",    country: "ci" },
-  { value: "wave-ci",         label: "Wave CI",          country: "ci" },
-  { value: "orange-money-senegal", label: "Orange Money SN", country: "sn" },
-  { value: "wave-senegal",    label: "Wave SN",          country: "sn" },
-  { value: "free-money-senegal", label: "Free Money SN", country: "sn" },
+  { value: "orange-money-ci",      label: "Orange Money",  country: "ci" },
+  { value: "mtn-ci",               label: "MTN MoMo",      country: "ci" },
+  { value: "moov-ci",              label: "Moov Money",    country: "ci" },
+  { value: "wave-ci",              label: "Wave",          country: "ci" },
+  { value: "orange-money-senegal", label: "Orange Money",  country: "sn" },
+  { value: "wave-senegal",         label: "Wave",          country: "sn" },
+  { value: "free-money-senegal",   label: "Free Money",    country: "sn" },
+  { value: "orange-money-burkina", label: "Orange Money",  country: "bf" },
+  { value: "moov-burkina-faso",    label: "Moov Money",    country: "bf" },
+  { value: "mtn-benin",            label: "MTN MoMo",      country: "bj" },
+  { value: "moov-benin",           label: "Moov Money",    country: "bj" },
+  { value: "t-money-togo",         label: "T-Money",       country: "tg" },
+  { value: "moov-togo",            label: "Moov Money",    country: "tg" },
+  { value: "orange-money-mali",    label: "Orange Money",  country: "ml" },
+  { value: "orange-money-cm",      label: "Orange Money",  country: "cm" },
+  { value: "mtn-cm",               label: "MTN MoMo",      country: "cm" },
+];
+
+const COUNTRIES = [
+  { value: "ci", label: "🇨🇮 Côte d'Ivoire" },
+  { value: "sn", label: "🇸🇳 Sénégal" },
+  { value: "bf", label: "🇧🇫 Burkina Faso" },
+  { value: "bj", label: "🇧🇯 Bénin" },
+  { value: "tg", label: "🇹🇬 Togo" },
+  { value: "ml", label: "🇲🇱 Mali" },
+  { value: "cm", label: "🇨🇲 Cameroun" },
 ];
 
 const TX_LABELS: Record<string, string> = {
@@ -109,10 +127,15 @@ export default function SectionWallet() {
     setError(null);
     setSuccess(null);
 
-    const res  = await fetch("/api/wallet/withdraw", {
+    const res = await fetch("/api/wallet/withdraw", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: parseInt(amount) }),
+      body:    JSON.stringify({
+        amount:       parseInt(amount),
+        phoneNumber:  phone.trim(),
+        withdrawMode: operator,
+        countryCode:  country,
+      }),
     });
     const d = await res.json();
     setSubmitting(false);
@@ -121,17 +144,16 @@ export default function SectionWallet() {
 
     setSuccess(d.message);
     setShowForm(false);
-    setAmount(""); setPhone("");
+    setAmount(""); setPhone(""); setOperator("orange-money-ci"); setCountry("ci");
 
     const updated = await fetch("/api/wallet").then((r) => r.json());
     setData(updated);
   }
 
-  const amountNum = parseInt(amount) || 0;
-  const fee       = Math.round(amountNum * 0.02);
-  const net       = amountNum - fee;
-  const isManual  = amountNum >= 200000;
-
+  const amountNum         = parseInt(amount) || 0;
+  const fee               = Math.round(amountNum * 0.02);
+  const net               = amountNum - fee;
+  const isManual          = amountNum >= 200000;
   const filteredOperators = OPERATORS.filter((op) => op.country === country);
 
   if (loading) {
@@ -204,6 +226,39 @@ export default function SectionWallet() {
                   className="text-white/30 hover:text-white text-sm transition-colors">Annuler</button>
               </div>
 
+              {/* Pays */}
+              <div className="space-y-1.5">
+                <label className="text-white/40 text-xs font-medium uppercase tracking-wider">Pays</label>
+                <select value={country}
+                  onChange={(e) => { setCountry(e.target.value); setOperator(""); }}
+                  className="w-full bg-[#1E0A3C] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-amber-400/50 transition-colors">
+                  {COUNTRIES.map((c) => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Opérateur */}
+              <div className="space-y-1.5">
+                <label className="text-white/40 text-xs font-medium uppercase tracking-wider">Opérateur</label>
+                <select value={operator} onChange={(e) => setOperator(e.target.value)} required
+                  className="w-full bg-[#1E0A3C] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-amber-400/50 transition-colors">
+                  <option value="">Choisir un opérateur</option>
+                  {filteredOperators.map((op) => (
+                    <option key={op.value} value={op.value}>{op.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Numéro */}
+              <div className="space-y-1.5">
+                <label className="text-white/40 text-xs font-medium uppercase tracking-wider">Numéro Mobile Money</label>
+                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                  placeholder="07 00 00 00 00" required
+                  className="w-full bg-[#1E0A3C] border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/25 outline-none focus:border-amber-400/50 transition-colors"/>
+              </div>
+
+              {/* Montant */}
               <div className="space-y-1.5">
                 <label className="text-white/40 text-xs font-medium uppercase tracking-wider">
                   Montant (min. 5 000 pts)
@@ -245,7 +300,8 @@ export default function SectionWallet() {
                 </div>
               )}
 
-              <button type="submit" disabled={submitting || amountNum < 5000}
+              <button type="submit"
+                disabled={submitting || amountNum < 5000 || !phone.trim() || !operator}
                 className="w-full bg-amber-400 hover:bg-amber-300 disabled:opacity-30 text-black font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
                 {submitting ? (
                   <>
@@ -259,7 +315,7 @@ export default function SectionWallet() {
               </button>
 
               <p className="text-white/20 text-xs text-center">
-                {isManual ? "Validation admin sous 24-48h" : "MoneyFusion vous contactera pour finaliser le retrait"}
+                {isManual ? "Validation admin sous 24-48h" : "Traitement automatique via MoneyFusion"}
               </p>
             </form>
           )}

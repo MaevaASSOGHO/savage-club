@@ -7,8 +7,7 @@ const MIN_WITHDRAWAL = 5000;
 const AUTO_THRESHOLD = 200000;
 const MF_FEE_RATE    = 0.02;
 const APP_URL        = process.env.NEXTAUTH_URL || "https://savage-club.vercel.app";
-const MF_PAYOUT_URL  = "https://pay.moneyfusion.net/api/v1/withdraw";
-const MF_API_KEY     = process.env.MONEYFUSION_API_KEY!;
+const RAILWAY_URL    = process.env.API_URL       || "https://awake-reflection-production-df19.up.railway.app";
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -29,7 +28,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Compte non vérifié" }, { status: 403 });
   }
 
-  const { amount } = await req.json();
+  const { amount, phoneNumber, withdrawMode, countryCode } = await req.json();
 
   if (!amount || typeof amount !== "number") {
     return NextResponse.json({ error: "Montant invalide" }, { status: 400 });
@@ -38,6 +37,12 @@ export async function POST(req: Request) {
     return NextResponse.json({
       error: `Minimum ${MIN_WITHDRAWAL.toLocaleString("fr-FR")} FCFA`,
     }, { status: 400 });
+  }
+  if (!phoneNumber?.trim()) {
+    return NextResponse.json({ error: "Numéro Mobile Money requis" }, { status: 400 });
+  }
+  if (!withdrawMode) {
+    return NextResponse.json({ error: "Opérateur requis" }, { status: 400 });
   }
 
   const wallet = await prisma.wallet.findUnique({ where: { userId: user.id } });
@@ -52,12 +57,13 @@ export async function POST(req: Request) {
   const withdrawal = await prisma.$transaction(async (tx) => {
     const w = await tx.withdrawal.create({
       data: {
-        walletId: wallet.id,
+        walletId:    wallet.id,
         amount,
         fee,
         net,
-        status:   isAutomatic ? "PROCESSING" : "PENDING",
-        method:   "MOBILE_MONEY" as any,
+        status:      isAutomatic ? "PROCESSING" : "PENDING",
+        method:      "MOBILE_MONEY" as any,
+        phoneNumber: phoneNumber.trim(),
       },
     });
 
@@ -72,7 +78,7 @@ export async function POST(req: Request) {
         amount:      -amount,
         type:        "WITHDRAWAL",
         status:      "PENDING",
-        description: `Retrait Mobile Money — ${amount.toLocaleString("fr-FR")} FCFA`,
+        description: `Retrait ${withdrawMode} — ${phoneNumber.trim()}`,
       },
     });
 
@@ -97,17 +103,18 @@ export async function POST(req: Request) {
     return w;
   });
 
+  // Traitement automatique via Railway (IP fixe requis par MoneyFusion)
   if (isAutomatic) {
     try {
-      const res = await fetch(MF_PAYOUT_URL, {
+      const res = await fetch(`${RAILWAY_URL}/payments/moneyfusion/payout`, {
         method:  "POST",
-        headers: {
-          "Content-Type":            "application/json",
-          "moneyfusion-private-key": MF_API_KEY,
-        },
-        body: JSON.stringify({
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
           amount:      net,
-          webhook_url: `${APP_URL}/api/webhooks/moneyfusion-payout`,
+          phoneNumber: phoneNumber.trim(),
+          withdrawMode,
+          countryCode: countryCode ?? "ci",
+          webhookUrl:  `${APP_URL}/api/webhooks/moneyfusion-payout`,
         }),
       });
 
@@ -124,7 +131,7 @@ export async function POST(req: Request) {
           amount, fee, net,
           status:    "PROCESSING",
           automatic: true,
-          message:   "Retrait en cours. MoneyFusion vous contactera pour finaliser.",
+          message:   "Retrait en cours de traitement.",
         }, { status: 201 });
       } else {
         throw new Error(data.message || "Erreur payout MoneyFusion");
@@ -132,6 +139,7 @@ export async function POST(req: Request) {
 
     } catch (err: any) {
       console.error("[Withdraw Auto] Erreur:", err.message);
+      // Fallback → validation manuelle
       await prisma.withdrawal.update({
         where: { id: withdrawal.id },
         data:  { status: "PENDING" },

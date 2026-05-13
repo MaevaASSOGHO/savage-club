@@ -180,6 +180,58 @@ app.post("/payments/moneyfusion/create", async (req, res) => {
     return res.status(500).json({ error: "Erreur proxy MoneyFusion", details: err.message });
   }
 });
+
+// ─── PROXY PAYOUT MONEYFUSION ─────────────────────────────────────────────
+// Les appels payout DOIVENT partir de Railway (IP fixe) pas de Vercel (IP dynamique)
+app.post("/payments/moneyfusion/payout", async (req, res) => {
+  try {
+    const { amount, phoneNumber, withdrawMode, countryCode, webhookUrl } = req.body;
+
+    if (!amount || !phoneNumber || !withdrawMode || !countryCode) {
+      return res.status(400).json({ 
+        statut: false, 
+        message: "Champs requis : amount, phoneNumber, withdrawMode, countryCode" 
+      });
+    }
+
+    const MF_API_KEY = process.env.MONEYFUSION_API_KEY;
+    if (!MF_API_KEY) {
+      return res.status(500).json({ statut: false, message: "Clé API MoneyFusion manquante" });
+    }
+
+    console.log("[MF Payout] Initiation retrait:", { amount, phoneNumber, withdrawMode, countryCode });
+
+    const response = await fetch("https://pay.moneyfusion.net/api/v1/withdraw", {
+      method:  "POST",
+      headers: {
+        "Content-Type":            "application/json",
+        "moneyfusion-private-key": MF_API_KEY,
+      },
+      body: JSON.stringify({
+        countryCode,
+        phone:         phoneNumber,
+        amount,
+        withdraw_mode: withdrawMode,
+        webhook_url:   webhookUrl,
+      }),
+    });
+
+    const data = await response.json();
+    console.log("[MF Payout] Réponse:", JSON.stringify(data));
+    return res.json(data);
+
+  } catch (err) {
+    console.error("[MF Payout] Erreur:", err.message);
+    return res.status(500).json({ statut: false, message: "Erreur proxy payout MoneyFusion" });
+  }
+});
+
+
+app.get("/myip", async (req, res) => {
+  const r = await fetch("https://api.ipify.org?format=json");
+  const d = await r.json();
+  res.json(d);
+});
 // ═════════════════════════════════════════════════════════════════
 // ─── WEBSOCKET SIGNALISATION WebRTC ──────────────────────────────
 // ═════════════════════════════════════════════════════════════════
