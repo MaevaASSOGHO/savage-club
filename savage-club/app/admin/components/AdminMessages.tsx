@@ -38,9 +38,9 @@ export default function AdminMessages({ systemUserId }: { systemUserId: string }
   async function openConversation(conv: Conversation) {
     setSelectedConv(conv);
     setLoadingMessages(true);
-    const res  = await fetch(`/api/conversations/${conv.id}/messages`);
+    const res  = await fetch(`/api/admin/messages/${conv.id}`);
     const data = await res.json();
-    setMessages(Array.isArray(data) ? data : []);
+    setMessages(Array.isArray(data) ? data : (data.messages ?? []));
     setLoadingMessages(false);
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
 
@@ -54,7 +54,7 @@ export default function AdminMessages({ systemUserId }: { systemUserId: string }
   async function sendMessage() {
     if (!text.trim() || !selectedConv || sending) return;
     setSending(true);
-    const res = await fetch(`/api/conversations/${selectedConv.id}/messages`, {
+    const res = await fetch(`/api/admin/messages/${selectedConv.id}`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ content: text.trim() }),
