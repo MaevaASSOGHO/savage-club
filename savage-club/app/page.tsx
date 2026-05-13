@@ -1,8 +1,8 @@
-// app/page.tsx
+// app/page.tsx (mise à jour)
 import { getServerSession, authOptions } from "@/lib/auth-compat";
-import { prisma }     from "@/lib/prisma";
-import PostCard       from "@/components/PostCard";
-import FeedLayout     from "@/components/FeedLayout";
+import { prisma } from "@/lib/prisma";
+import PostCard from "@/components/PostCard";
+import FeedLayout from "@/components/FeedLayout";
 
 export const dynamic = "force-dynamic";
 
@@ -13,12 +13,12 @@ export default async function HomePage() {
 
   if (session?.user?.email) {
     const user = await prisma.user.findUnique({
-      where:  { email: session.user.email },
+      where: { email: session.user.email },
       select: { id: true },
     });
     if (user) {
       const subs = await prisma.subscription.findMany({
-        where:  { subscriberId: user.id, status: "ACTIVE" },
+        where: { subscriberId: user.id, status: "ACTIVE" },
         select: { creatorId: true },
       });
       subscribedCreatorIds = subs.map((s) => s.creatorId);
@@ -41,17 +41,17 @@ export default async function HomePage() {
           displayName: true,
           avatar: true,
           isVerified: true,
-          subscriptionPrice: true,  // ← nécessaire pour SubscribeModal
-          subscriptionVIP: true,     // ← nécessaire pour SubscribeModal
+          subscriptionPrice: true,
+          subscriptionVIP: true,
         },
       },
       PostMedia: { orderBy: { order: "asc" } },
       Like: true,
       Comment: {
-        where:   { parentId: null },
+        where: { parentId: null },
         include: { User: { select: { id: true, username: true, avatar: true } } },
         orderBy: { createdAt: "asc" },
-        take:    2,
+        take: 2,
       },
       _count: { select: { Comment: true } },
     },
@@ -60,25 +60,25 @@ export default async function HomePage() {
 
   return (
     <FeedLayout variant="solid">
-      <div className="flex flex-col items-center w-full">
+      <div className="flex flex-col items-center w-full max-w-2xl mx-auto px-4">
         {posts.map((post) => (
-          <div key={post.id} className="w-full">
+          <div key={post.id} className="w-full mb-4">
             <PostCard
               post={{
-                id:         post.id,
-                content:    post.content ?? "",
-                createdAt:  post.createdAt.toISOString(),
-                price:      post.price,
+                id: post.id,
+                content: post.content ?? "",
+                createdAt: post.createdAt.toISOString(),
+                price: post.price,
                 previewUrl: post.previewUrl,
-                medias:     post.PostMedia,
-                likes:      post.Like,
-                comments:   post.Comment,
+                medias: post.PostMedia,
+                likes: post.Like,
+                comments: post.Comment,
                 user: {
-                  id:          post.User.id,
-                  username:    post.User.username,
+                  id: post.User.id,
+                  username: post.User.username,
                   displayName: post.User.displayName,
-                  avatar:      post.User.avatar,
-                  isVerified:  post.User.isVerified,
+                  avatar: post.User.avatar,
+                  isVerified: post.User.isVerified,
                   subscriptionPrice: post.User.subscriptionPrice,
                   subscriptionVIP: post.User.subscriptionVIP,
                 },

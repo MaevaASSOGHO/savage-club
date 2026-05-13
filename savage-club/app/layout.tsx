@@ -1,3 +1,4 @@
+// app/layout.tsx (mise à jour)
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -5,7 +6,7 @@ import NextAuthProvider from "@/components/SessionProvider";
 import AntiCapture from "@/components/AntiCapture"; 
 import GlobalWatermark from "@/components/GlobalWatermark";
 import Providers from "./providers";
-
+import ResponsiveLayout from "@/components/ResponsiveLayout";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,10 +19,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  // ── Identité ────────────────────────────────────────────────────────────────
   title: {
     default: "Savage Club",
-    template: "%s • Savage Club",   // ex : "Mon profil • Savage Club"
+    template: "%s • Savage Club",
   },
   description:
     "La plateforme exclusive des créateurs Savage. Abonnez-vous, découvrez des contenus uniques et interagissez avec vos créateurs préférés.",
@@ -30,8 +30,6 @@ export const metadata: Metadata = {
   generator: "Next.js",
   keywords: ["savage club", "créateurs", "contenu exclusif", "abonnement"],
   referrer: "origin-when-cross-origin",
-
-  // ── Favicons & icônes ────────────────────────────────────────────────────────
   icons: {
     icon: [
       { url: "/icons/favicon-32.png",  sizes: "32x32",  type: "image/png" },
@@ -43,8 +41,6 @@ export const metadata: Metadata = {
       { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
     ],
   },
-
-  // ── Open Graph (partage réseaux sociaux) ────────────────────────────────────
   openGraph: {
     type: "website",
     locale: "fr_FR",
@@ -55,7 +51,6 @@ export const metadata: Metadata = {
       "La plateforme exclusive qui rémunère les créateurs africains. Abonnez-vous, découvrez des contenus uniques.",
     images: [
       {
-        // ⚠️ Image de partage 1200×630 : /public/og-image.png
         url: "/og-image.png",
         width: 1200,
         height: 630,
@@ -63,18 +58,13 @@ export const metadata: Metadata = {
       },
     ],
   },
-
-  // ── Twitter / X Card ────────────────────────────────────────────────────────
   twitter: {
     card: "summary_large_image",
     title: "Savage Club",
     description:
       "La plateforme exclusive qui rémunère les créateurs africains.",
-    images: ["/og-image.png"], // même image qu'Open Graph
-    // creator: "@savagecluboff", // ⚠️ Décommenter si vous avez un compte X
+    images: ["/og-image.png"],
   },
-
-  // ── Robots ──────────────────────────────────────────────────────────────────
   robots: {
     index: true,
     follow: true,
@@ -85,8 +75,6 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
-
-  // ── Canonical / URL de base ─────────────────────────────────────────────────
   metadataBase: new URL("https://savage-club.vercel.app"),
 };
 
@@ -96,16 +84,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased ml-80px md:ml-[220px]  text-white`}>
-        
+    <html lang="fr">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased text-white bg-gradient-to-b from-[#0a0218] to-[#1a0533] min-h-screen`}>
         <NextAuthProvider>
           <AntiCapture /> 
-          <Providers> 
-          {children}
+          <Providers>
+            <ResponsiveLayout>
+              {children}
+            </ResponsiveLayout>
           </Providers>
         </NextAuthProvider>
-        
       </body>
     </html>
   );

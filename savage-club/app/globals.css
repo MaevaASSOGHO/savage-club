@@ -57,3 +57,31 @@ body {
 .slide-in-from-top-2 {
   animation-name: slide-in-from-top-2;
 }
+
+/* Pour mobile, désactiver le hover qui peut être gênant */
+@media (max-width: 768px) {
+  .hover\:ml-\[220px\] {
+    transition: none;
+  }
+  
+  /* Améliorer le défilement sur mobile */
+  .overflow-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Animation pour le panel de notifications sur mobile */
+@media (max-width: 768px) {
+  @keyframes slideUp {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+  
+  .notifications-panel-mobile {
+    animation: slideUp 0.3s ease-out;
+  }
+}
