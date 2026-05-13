@@ -30,11 +30,11 @@ export default function VideoPlayer({
   src, poster, postId, watermarkText,
   className = '', style,
   aspectRatio = '16/9', fill = false,
-  autoPlay = false, loop = false,
+  autoPlay = false, loop = true,
 }: VideoPlayerProps) {
-  const videoRef   = useRef<HTMLVideoElement>(null);
+  const videoRef  = useRef<HTMLVideoElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const hideTimer  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const [isPlaying,    setIsPlaying]    = useState(false);
   const [currentTime,  setCurrentTime]  = useState(0);
