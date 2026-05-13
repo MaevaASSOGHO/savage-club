@@ -7,6 +7,20 @@ import { useSession } from "next-auth/react";
 import MediaWatermark from "@/components/MediaWatermark";
 import SubscribeModal from "@/components/profile/SubscribeModal";
 
+/**
+ * Génère l'URL d'une miniature statique à partir d'une vidéo Cloudinary.
+ * Extrait la première frame (so_0) et la convertit en JPEG.
+ * Si l'URL n'est pas Cloudinary, retourne null → fallback sur fond noir avec icône.
+ */
+function getVideoThumbnail(videoUrl: string): string | null {
+  if (!videoUrl.includes("cloudinary.com")) return null;
+  // Ex : .../video/upload/v123/path/file.mp4
+  //  →   .../video/upload/so_0,f_jpg/v123/path/file.jpg
+  return videoUrl
+    .replace("/video/upload/", "/video/upload/so_0,f_jpg/")
+    .replace(/\.(mp4|mov|webm)$/i, ".jpg");
+}
+
 type DiscoverPost = {
   id:         string;
   content:    string;
@@ -68,11 +82,15 @@ export default function MediaCard({ post }: { post: DiscoverPost }) {
     const isPreviewVideo =
       thumb.includes("/video/") || /\.(mp4|mov|webm)$/i.test(thumb);
 
+    // Pour l'aperçu flouté : on préfère une miniature statique (pas de <video> sur mobile)
+    const previewThumb = isPreviewVideo ? (getVideoThumbnail(thumb) ?? thumb) : thumb;
+    const previewIsStillVideo = isPreviewVideo && !getVideoThumbnail(thumb);
+
     return (
       <>
-        <div className="relative aspect-square bg-black overflow-hidden group">
-          {/* Aperçu flou */}
-          {isPreviewVideo ? (
+        <div className="relative aspect-[3/4] bg-black overflow-hidden group">
+          {/* Aperçu flou — miniature statique Cloudinary si vidéo */}
+          {previewIsStillVideo ? (
             <video
               src={thumb}
               muted
@@ -83,7 +101,7 @@ export default function MediaCard({ post }: { post: DiscoverPost }) {
             />
           ) : (
             <img
-              src={thumb}
+              src={previewThumb}
               alt=""
               className="w-full h-full object-cover scale-105 blur-sm"
               draggable={false}
@@ -145,11 +163,22 @@ export default function MediaCard({ post }: { post: DiscoverPost }) {
 
   // --- Cas 2 : Post abonnés uniquement, utilisateur non abonné ---
   if (isSubscribersOnly && !canView) {
+    // Miniature statique Cloudinary pour les vidéos (évite l'écran noir sur mobile)
+    const blurThumb = isVideo ? (getVideoThumbnail(firstMedia.url) ?? null) : null;
+
     return (
       <>
-        <div className="relative aspect-square bg-black overflow-hidden group">
-          {/* Média flouté */}
-          {isVideo ? (
+        <div className="relative aspect-[3/4] bg-black overflow-hidden group">
+          {/* Média flouté — image statique si vidéo Cloudinary */}
+          {isVideo && blurThumb ? (
+            <img
+              src={blurThumb}
+              alt=""
+              className="w-full h-full object-cover scale-105 blur-md"
+              draggable={false}
+              onContextMenu={(e) => e.preventDefault()}
+            />
+          ) : isVideo ? (
             <video
               src={firstMedia.url}
               muted
@@ -199,15 +228,30 @@ export default function MediaCard({ post }: { post: DiscoverPost }) {
   }
 
   // --- Cas 3 : Contenu visible (PUBLIC, ou abonné, ou propriétaire) ---
+  // Pour les vidéos : on affiche la miniature Cloudinary dans la grille.
+  // Le lecteur vidéo complet est sur la page /post/[id].
+  const videoThumb = isVideo ? getVideoThumbnail(firstMedia.url) : null;
+
   return (
     <Link href={`/post/${post.id}`} className="block">
-      <div className="relative aspect-square bg-black overflow-hidden group">
-        {isVideo ? (
+      <div className="relative aspect-[3/4] bg-black overflow-hidden group">
+        {isVideo && videoThumb ? (
+          // Miniature statique Cloudinary → plus d'écran noir sur mobile
+          <img
+            src={videoThumb}
+            alt={post.content ?? ""}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            draggable={false}
+            onContextMenu={(e) => e.preventDefault()}
+          />
+        ) : isVideo ? (
+          // Fallback : <video> si pas Cloudinary (rare)
           <video
             src={firstMedia.url}
             muted
             playsInline
             loop
+            preload="metadata"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
         ) : (

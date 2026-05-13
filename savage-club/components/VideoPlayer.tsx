@@ -32,8 +32,9 @@ export default function VideoPlayer({
   aspectRatio = '16/9', fill = false,
   autoPlay = false, loop = false,
 }: VideoPlayerProps) {
-  const videoRef  = useRef<HTMLVideoElement>(null);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const videoRef   = useRef<HTMLVideoElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const hideTimer  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const [isPlaying,    setIsPlaying]    = useState(false);
   const [currentTime,  setCurrentTime]  = useState(0);
@@ -54,6 +55,32 @@ export default function VideoPlayer({
     if (!v) return;
     v.muted = isMuted;
   }, [isMuted]);
+
+  // ── Autoplay au scroll — même logique que la page Reels ────────────────────
+  // IntersectionObserver sur le wrapper : quand ≥ 50% visible → play(),
+  // sinon pause(). Identique à ce que fait page.tsx avec videoRefs.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    const v = videoRef.current;
+    if (!wrapper || !v) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          v.muted = true;          // iOS exige muted pour autoplay
+          setIsMuted(true);
+          v.play().catch(() => {}); // échec silencieux si bloqué
+        } else {
+          v.pause();
+        }
+      },
+      { threshold: 0.5 }           // même seuil que la page Reels
+    );
+
+    observer.observe(wrapper);
+    return () => observer.disconnect();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);  // une seule fois au montage — le wrapper ne change pas
 
   // ── Autoplay impératif ──────────────────────────────────────────────────────
   // Sur mobile, l'attribut HTML autoPlay est ignoré. On déclenche play()
@@ -179,6 +206,7 @@ export default function VideoPlayer({
 
   return (
     <div
+      ref={wrapperRef}
       className={className}
       style={{ ...wrapperStyle, ...style }}
       onMouseMove={resetHideTimer}
