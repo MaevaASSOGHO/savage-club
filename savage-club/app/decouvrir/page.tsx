@@ -7,38 +7,43 @@ import { useSession } from 'next-auth/react';
 import Sidebar from "@/components/Sidebar";
 
 type Media = {
-  id: string;
-  url: string;
-  type: 'IMAGE' | 'VIDEO';
-  caption?: string;
-  likes: { id: string }[];
-  comments: { id: string }[];
-  user: {
-    id: string;
-    username: string;
-    avatar: string | null;
-    isVerified: boolean;
-  };
+  id:         string;
+  content:    string;
+  createdAt:  string | Date;
   visibility: 'PUBLIC' | 'SUBSCRIBERS' | 'PAID';
+  price?:     number | null;
+  previewUrl?: string | null;
   medias: {
-    id: string;
-    url: string;
-    type: string;
+    id:    string;
+    url:   string;
+    type:  string;
     order: number;
   }[];
+  likes:    { id: string }[];
+  comments: { id: string }[];
+  user: {
+    id:                string;
+    username:          string;
+    displayName?:      string | null;
+    avatar:            string | null;
+    isVerified:        boolean;
+    subscriptionPrice?: number | null;
+    subscriptionVIP?:   number | null;
+  };
+  _count?: { PostMedia: number };
 };
 
 export default function DecouvrirPage() {
-  const { data: session } = useSession();
+  useSession(); // garde la session active pour les composants enfants
   const [posts, setPosts] = useState<Media[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
-  const isLoadingRef = useRef(false);
+  const observerRef   = useRef<IntersectionObserver | null>(null);
+  const loadMoreRef   = useRef<HTMLDivElement>(null);
+  const isLoadingRef  = useRef(false);
 
   const fetchPosts = useCallback(async (pageNum: number) => {
     if (isLoadingRef.current) return;
@@ -55,8 +60,8 @@ export default function DecouvrirPage() {
       if (pageNum === 1) {
         setPosts(data.posts);
       } else {
-        setPosts(prev => {
-          const ids = new Set(prev.map(p => p.id));
+        setPosts((prev) => {
+          const ids = new Set(prev.map((p) => p.id));
           return [...prev, ...data.posts.filter((p: Media) => !ids.has(p.id))];
         });
       }
@@ -74,38 +79,36 @@ export default function DecouvrirPage() {
   useEffect(() => {
     fetchPosts(1);
   }, [fetchPosts]);
-  
-  const handleObserver = useCallback((entries: IntersectionObserverEntry[]) => {
-    const [target] = entries;
-    if (target.isIntersecting && hasMore && !loading) {
-      fetchPosts(page + 1);
-    }
-  }, [hasMore, loading, page, fetchPosts]);
+
+  const handleObserver = useCallback(
+    (entries: IntersectionObserverEntry[]) => {
+      const [target] = entries;
+      if (target.isIntersecting && hasMore && !loading) {
+        fetchPosts(page + 1);
+      }
+    },
+    [hasMore, loading, page, fetchPosts],
+  );
 
   useEffect(() => {
     const element = loadMoreRef.current;
     if (!element) return;
 
     observerRef.current = new IntersectionObserver(handleObserver, {
-      root: null,
+      root:       null,
       rootMargin: '200px',
-      threshold: 0.1
+      threshold:  0.1,
     });
-
     observerRef.current.observe(element);
 
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-      }
-    };
+    return () => { observerRef.current?.disconnect(); };
   }, [handleObserver]);
 
   return (
     <main className="flex min-h-screen bg-[#1a0533]">
-        <Sidebar />
+      <Sidebar />
       <div className="container mx-auto px-4 py-6">
-        {/* Header simple */}
+        {/* En-tête */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-white">Découvrir</h1>
           <p className="text-white/40 text-sm">Explorez les dernières publications</p>
@@ -115,7 +118,7 @@ export default function DecouvrirPage() {
         {error ? (
           <div className="flex flex-col items-center justify-center py-16">
             <p className="text-red-500 mb-4">{error}</p>
-            <button 
+            <button
               onClick={() => fetchPosts(1)}
               className="px-4 py-2 bg-[#2A1356] text-white rounded-lg hover:bg-[#3A2366] transition-colors text-sm"
             >
@@ -134,7 +137,7 @@ export default function DecouvrirPage() {
               ))}
             </div>
 
-            {/* Loader et observer */}
+            {/* Sentinel d'infinite scroll + loader */}
             <div ref={loadMoreRef} className="w-full py-8 flex justify-center">
               {loading && (
                 <div className="flex items-center gap-2 text-white/40">
@@ -145,11 +148,8 @@ export default function DecouvrirPage() {
                   <span className="text-xs">Chargement...</span>
                 </div>
               )}
-              
               {!hasMore && posts.length > 0 && (
-                <p className="text-white/20 text-xs">
-                  Vous avez vu toutes les publications
-                </p>
+                <p className="text-white/20 text-xs">Vous avez vu toutes les publications</p>
               )}
             </div>
           </>
