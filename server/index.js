@@ -229,6 +229,11 @@ app.post("/payments/moneyfusion/payout", async (req, res) => {
   }
 });
 
+app.get("/myip", async (req, res) => {
+  const r = await fetch("https://api.ipify.org?format=json");
+  const d = await r.json();
+  res.json(d);
+});
 
 // ═════════════════════════════════════════════════════════════════
 // ─── WEBSOCKET SIGNALISATION WebRTC ──────────────────────────────
