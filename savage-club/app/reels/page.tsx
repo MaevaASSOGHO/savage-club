@@ -1,7 +1,7 @@
 // app/reels/page.tsx
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ReelCard from "@/components/reels/ReelCard";
@@ -30,7 +30,8 @@ type Post = {
   };
 };
 
-export default function ReelsPage() {
+// Composant interne isolé dans Suspense — requis par Next.js pour useSearchParams()
+function ReelsContent() {
   const { data: session, status } = useSession();
   const router       = useRouter();
   const searchParams = useSearchParams();
@@ -228,5 +229,21 @@ export default function ReelsPage() {
         )}
       </div>
     </FeedLayout>
+  );
+}
+
+// Le Suspense est obligatoire dès qu'un composant enfant appelle useSearchParams().
+// Sans lui, Next.js échoue au prerendering statique avec une erreur de build.
+export default function ReelsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-screen bg-black items-center justify-center">
+          <div className="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <ReelsContent />
+    </Suspense>
   );
 }
