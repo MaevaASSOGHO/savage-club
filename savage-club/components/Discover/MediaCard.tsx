@@ -139,7 +139,7 @@ export default function MediaCard({ post }: { post: DiscoverPost }) {
           {/* Indicateur vidéo */}
           {isPreviewVideo && (
             <div className="absolute top-1.5 left-1.5 bg-black/50 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full z-20 pointer-events-none">
-              ▶ RÉEL
+              ▶ 
             </div>
           )}
         </div>
@@ -270,7 +270,7 @@ export default function MediaCard({ post }: { post: DiscoverPost }) {
         {/* Indicateur vidéo */}
         {isVideo && (
           <div className="absolute top-1.5 left-1.5 bg-black/50 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full z-20 pointer-events-none">
-            ▶ RÉEL
+            ▶ 
           </div>
         )}
 

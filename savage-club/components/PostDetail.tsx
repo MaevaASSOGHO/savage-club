@@ -75,7 +75,7 @@ function MediaPanel({ medias, postId }: {
   const isCarousel = medias.length > 1;
 
   return (
-    <div className={`relative bg-black flex items-center justify-center
+    <div className={`relative bg-[#1a0533] flex items-center justify-center
       w-full md:h-full
       ${isReel ? "aspect-[4/5] md:aspect-auto" : "aspect-square md:aspect-auto"}
     `}>
@@ -102,12 +102,12 @@ function MediaPanel({ medias, postId }: {
       )}
 
       {isReel && (
-        <div className="absolute top-3 left-3 bg-black/50 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
+        <div className="absolute top-3 left-3 bg-[#1a0533]/50 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <rect x="2" y="2" width="20" height="20" rx="2"/>
             <path d="M7 2v20M17 2v20M2 12h20"/>
           </svg>
-          RÉEL
+          {/* RÉEL */}
         </div>
       )}
 
@@ -231,7 +231,7 @@ export default function PostDetail({ post, viewerLiked, viewerSaved, viewerId, p
       <div className="hidden md:flex w-full max-w-5xl mx-auto min-h-[80vh] max-h-[90vh] rounded-2xl overflow-hidden shadow-2xl border border-white/8">
 
         {/* Colonne gauche — média */}
-        <div className={`flex-shrink-0 bg-black flex items-center justify-center relative ${isReel ? "w-[380px]" : "w-[520px]"}`}>
+        <div className={`flex-shrink-0 bg-[#1a0533] flex items-center justify-center relative ${isReel ? "w-[380px]" : "w-[520px]"}`}>
           {unlocked ? (
             <MediaPanel medias={post.medias} postId={post.id} />
           ) : post.previewUrl ? (
@@ -243,7 +243,7 @@ export default function PostDetail({ post, viewerLiked, viewerSaved, viewerId, p
               )}
               <MediaWatermark postId={post.id}/>
               {/* Overlay paiement */}
-              <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center">
+              <div className="absolute inset-0 bg-[#1a0533]/60 backdrop-blur-[1px] flex items-center justify-center">
                 <div className="bg-[#1E0A3C] border border-white/10 rounded-2xl p-6 flex flex-col items-center gap-4 max-w-xs">
                   <div className="w-14 h-14 rounded-full bg-amber-400/20 flex items-center justify-center">
                     <span className="text-3xl">🔒</span>
