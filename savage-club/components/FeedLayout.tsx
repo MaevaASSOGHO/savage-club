@@ -1,4 +1,7 @@
 // components/FeedLayout.tsx
+"use client";
+
+import { useEffect, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import Link from "next/link";
 import { Plus } from "lucide-react";
@@ -12,6 +15,17 @@ export default function FeedLayout({
   variant?: "default" | "dark" | "solid";
   hideBackground?: boolean;
 }) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   // Si hideBackground est true, pas de fond
   const bg = hideBackground
     ? ""
@@ -31,8 +45,8 @@ export default function FeedLayout({
         </div>
       </main>
 
-      {/* Bouton Créer - visible sur toutes les pages sauf si hideBackground est true (réels) */}
-      {!hideBackground && (
+      {/* Bouton Créer - visible uniquement sur desktop et pas sur la page réels */}
+      {!hideBackground && !isMobile && (
         <Link
           href="/create"
           className="

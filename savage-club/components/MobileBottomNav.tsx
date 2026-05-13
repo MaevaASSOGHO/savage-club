@@ -6,11 +6,7 @@ import { Compass, Bell, PlusCircle, Film, MessageCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 import NotificationsPanel from "@/components/NotificationsPanel";
 
-interface MobileBottomNavProps {
-  onPlusClick?: () => void;
-}
-
-export default function MobileBottomNav({ onPlusClick }: MobileBottomNavProps) {
+export default function MobileBottomNav() {
   const router = useRouter();
   const pathname = usePathname();
   const [notifOpen, setNotifOpen] = useState(false);
@@ -20,7 +16,7 @@ export default function MobileBottomNav({ onPlusClick }: MobileBottomNavProps) {
   const navItems = [
     { name: "Découvrir", icon: Compass, href: "/decouvrir" },
     { name: "Notifications", icon: Bell, href: "#", action: "notif" as const },
-    { name: "Plus", icon: PlusCircle, href: "#", action: "plus" as const },
+    { name: "Créer", icon: PlusCircle, href: "/create", action: "create" as const },
     { name: "Réels", icon: Film, href: "/reels" },
     { name: "Messages", icon: MessageCircle, href: "/messages", action: "message" as const },
   ];
@@ -79,14 +75,14 @@ export default function MobileBottomNav({ onPlusClick }: MobileBottomNavProps) {
     return () => clearInterval(interval);
   }, []);
 
-  const handleNavigation = (href?: string, action?: "notif" | "plus" | "message") => {
+  const handleNavigation = (href?: string, action?: "notif" | "create" | "message") => {
     if (action === "notif") {
       setNotifOpen(true);
       return;
     }
 
-    if (action === "plus") {
-      onPlusClick?.();
+    if (action === "create") {
+      router.push("/create");
       return;
     }
 
@@ -151,13 +147,14 @@ export default function MobileBottomNav({ onPlusClick }: MobileBottomNavProps) {
         </div>
       </nav>
 
-      {/* Panel de notifications */}
+      {/* Panel de notifications - Version full screen mobile */}
       {notifOpen && (
         <NotificationsPanel
           onClose={() => {
             setNotifOpen(false);
             setNotifCount(0);
           }}
+          isMobile={true}
         />
       )}
     </>

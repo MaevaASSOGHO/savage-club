@@ -74,7 +74,7 @@ function timeAgo(date: string) {
   return new Date(date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
 
-export default function NotificationsPanel({ onClose }: { onClose: () => void }) {
+export default function NotificationsPanel({ onClose, isMobile = false }: { onClose: () => void; isMobile?: boolean }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -206,6 +206,202 @@ export default function NotificationsPanel({ onClose }: { onClose: () => void })
     return "";
   };
 
+  // Version mobile - full screen
+  if (isMobile) {
+    return (
+      <div className="fixed inset-0 z-50 bg-[#1a0533] flex flex-col">
+        {/* Header */}
+        <div className="sticky top-0 bg-[#1E0A3C] border-b border-white/10 px-5 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h2 className="text-white font-bold text-base">Notifications</h2>
+            {unreadCount > 0 && (
+              <span className="bg-amber-400 text-black text-[10px] font-black px-1.5 py-0.5 rounded-full">
+                {unreadCount}
+              </span>
+            )}
+            {markingAsRead && (
+              <svg className="animate-spin w-3 h-3 text-amber-400 ml-1" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+              </svg>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="text-white/30 hover:text-white transition-colors p-2"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Liste avec infinite scroll */}
+        <div className="flex-1 overflow-y-auto">
+          {loading && (
+            <div className="flex items-center justify-center py-12">
+              <svg className="animate-spin w-5 h-5 text-amber-400" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+              </svg>
+            </div>
+          )}
+
+          {!loading && notifications.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <span className="text-3xl">🔔</span>
+              <p className="text-white/30 text-sm">Aucune notification</p>
+              <p className="text-white/20 text-xs">Les notifications apparaîtront ici</p>
+            </div>
+          )}
+
+          <div className="flex flex-col">
+            {notifications.map((notif) => {
+              // Rendu pour les notifications groupées
+              if (notif.isGrouped) {
+                return (
+                  <Link
+                    key={notif.id}
+                    href={`/post/${notif.post?.id}`}
+                    onClick={onClose}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/5"
+                  >
+                    <div className="relative flex-shrink-0">
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-purple-700 flex items-center justify-center">
+                        <span className="text-white text-xs font-bold">{notif.count}</span>
+                      </div>
+                      <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#1E0A3C] rounded-full flex items-center justify-center text-xs">
+                        {TYPE_ICON[notif.type] ?? "•"}
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white/90 text-sm leading-relaxed">
+                        {getGroupText(notif)}
+                      </p>
+                      <p className="text-white/40 text-xs mt-1">
+                        {timeAgo(notif.aggregatedAt || notif.createdAt)}
+                      </p>
+                    </div>
+                    
+                    {notif.post?.medias?.[0] && (
+                      <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-white/5">
+                        {notif.post.medias[0].type === "VIDEO" ? (
+                          <video src={notif.post.medias[0].url} className="w-full h-full object-cover" muted/>
+                        ) : (
+                          <img src={notif.post.medias[0].url} alt="" className="w-full h-full object-cover"/>
+                        )}
+                      </div>
+                    )}
+                  </Link>
+                );
+              }
+              
+              // Rendu normal pour les notifications non groupées
+              return (
+                <Link
+                  key={notif.id}
+                  href={
+                    notif.type === "BOOKING_REMINDER" || notif.type === "BOOKING_START"
+                      ? `/appel/room/${notif.bookingId}`
+                      : notif.type === "BOOKING" || 
+                        notif.type === "BOOKING_CONFIRMED" || 
+                        notif.type === "BOOKING_RESCHEDULE" ||
+                        notif.type === "BOOKING_CANCELLED"
+                      ? `/parametres?section=reservations`
+                      : notif.type === "IDENTITY_VERIFIED" || notif.type === "IDENTITY_REJECTED"
+                      ? `/parametres?section=verification`
+                      : notif.post
+                      ? `/post/${notif.post.id}`
+                      : notif.sender
+                      ? `/profil/${notif.sender.username}`
+                      : "#"
+                  }
+                  onClick={onClose}
+                  className={`flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/5 ${
+                    !notif.isRead ? "bg-amber-400/5" : ""
+                  }`}
+                >
+                  {/* Avatar + icône type */}
+                  <div className="relative flex-shrink-0">
+                    <div className="w-10 h-10 rounded-full overflow-hidden bg-purple-700">
+                      {notif.type === "IDENTITY_VERIFIED" || notif.type === "IDENTITY_REJECTED" ? (
+                        <img src={BETTIE_AVATAR} alt="Bettie" className="w-full h-full object-cover"/>
+                      ) : notif.sender?.avatar ? (
+                        <img src={notif.sender.avatar} alt="" className="w-full h-full object-cover"/>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white text-sm font-bold">
+                          {notif.sender?.username?.[0]?.toUpperCase() ?? "👤"}
+                        </div>
+                      )}
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#1E0A3C] rounded-full flex items-center justify-center text-xs">
+                      {TYPE_ICON[notif.type] ?? "•"}
+                    </div>
+                  </div>
+
+                  {/* Texte */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white/90 text-sm leading-relaxed line-clamp-2">
+                      {notif.type === "IDENTITY_REJECTED" && notif.reason ? (
+                        <>
+                          <span className="font-semibold text-white">Identification refusée</span>
+                          {" : "}{notif.reason}
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-semibold text-white">
+                            {notif.type === "IDENTITY_VERIFIED" || notif.type === "IDENTITY_REJECTED"
+                              ? "Bettie de Savage Club"
+                              : notif.sender?.username ?? "Utilisateur"
+                            }
+                          </span>
+                          {" "}{TYPE_LABEL[notif.type] ?? "a interagi avec vous"}
+                        </>
+                      )}
+                    </p>
+                    <p className="text-white/40 text-xs mt-1">{timeAgo(notif.createdAt)}</p>
+                  </div>
+
+                  {/* Miniature post */}
+                  {notif.post?.medias?.[0] && (
+                    <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-white/5">
+                      {notif.post.medias[0].type === "VIDEO" ? (
+                        <video src={notif.post.medias[0].url} className="w-full h-full object-cover" muted/>
+                      ) : (
+                        <img src={notif.post.medias[0].url} alt="" className="w-full h-full object-cover"/>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Dot non lu */}
+                  {!notif.isRead && (
+                    <div className="w-2 h-2 bg-amber-400 rounded-full flex-shrink-0"/>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+
+          {/* Loader pour pagination */}
+          {hasMore && (
+            <div ref={loadMoreRef} className="flex justify-center py-4">
+              {loadingMore ? (
+                <svg className="animate-spin w-5 h-5 text-amber-400" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+              ) : (
+                <span className="text-white/20 text-xs">Chargez plus...</span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Version desktop - panel latéral
   return (
     <>
       {/* Overlay transparent pour fermer en cliquant dehors */}
@@ -333,7 +529,7 @@ export default function NotificationsPanel({ onClose }: { onClose: () => void })
                   <div className="relative flex-shrink-0">
                     <div className="w-10 h-10 rounded-full overflow-hidden bg-purple-700">
                       {notif.type === "IDENTITY_VERIFIED" || notif.type === "IDENTITY_REJECTED" ? (
-                        <img src="URL_PHOTO_BETTIE" alt="Bettie" className="w-full h-full object-cover"/>
+                        <img src={BETTIE_AVATAR} alt="Bettie" className="w-full h-full object-cover"/>
                       ) : notif.sender?.avatar ? (
                         <img src={notif.sender.avatar} alt="" className="w-full h-full object-cover"/>
                       ) : (

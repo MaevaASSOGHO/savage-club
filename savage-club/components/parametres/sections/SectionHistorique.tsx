@@ -88,7 +88,7 @@ export default function SectionHistorique() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <SectionTitle>Historique d'achats</SectionTitle>
+        <SectionTitle>Vos achats récents</SectionTitle>
         <div className="flex justify-center py-16">
           <svg className="animate-spin w-6 h-6 text-amber-400" viewBox="0 0 24 24" fill="none">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
@@ -100,8 +100,7 @@ export default function SectionHistorique() {
   }
 
   return (
-    <div className="space-y-4">
-      <SectionTitle>Historique d'achats</SectionTitle>
+    <div className="space-y-3">
 
       {payments.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">

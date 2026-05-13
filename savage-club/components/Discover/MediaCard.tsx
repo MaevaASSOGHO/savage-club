@@ -139,7 +139,7 @@ export default function MediaCard({ post }: { post: DiscoverPost }) {
           {/* Indicateur vidéo */}
           {isPreviewVideo && (
             <div className="absolute top-1.5 left-1.5 bg-black/50 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full z-20 pointer-events-none">
-              ▶ 
+              ▶ RÉEL
             </div>
           )}
         </div>
@@ -232,8 +232,11 @@ export default function MediaCard({ post }: { post: DiscoverPost }) {
   // Le lecteur vidéo complet est sur la page /post/[id].
   const videoThumb = isVideo ? getVideoThumbnail(firstMedia.url) : null;
 
+  // Réels → page /reels avec scroll sur ce reel ; images → page détail du post
+  const postHref = isVideo ? `/reels?id=${post.id}` : `/post/${post.id}`;
+
   return (
-    <Link href={`/post/${post.id}`} className="block">
+    <Link href={postHref} className="block">
       <div className="relative aspect-[3/4] bg-black overflow-hidden group">
         {isVideo && videoThumb ? (
           // Miniature statique Cloudinary → plus d'écran noir sur mobile
@@ -270,7 +273,7 @@ export default function MediaCard({ post }: { post: DiscoverPost }) {
         {/* Indicateur vidéo */}
         {isVideo && (
           <div className="absolute top-1.5 left-1.5 bg-black/50 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full z-20 pointer-events-none">
-            ▶ 
+            ▶ RÉEL
           </div>
         )}
 

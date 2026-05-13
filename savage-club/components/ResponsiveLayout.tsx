@@ -6,20 +6,16 @@ import Sidebar from "@/components/Sidebar";
 import MobileHeader from "@/components/MobileHeader";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { usePathname } from "next/navigation";
 
 interface ResponsiveLayoutProps {
   children: React.ReactNode;
-  onTabChange?: (tab: "creators" | "formateurs") => void;
-  defaultTab?: "creators" | "formateurs";
 }
 
-export default function ResponsiveLayout({ 
-  children, 
-  onTabChange, 
-  defaultTab = "creators" 
-}: ResponsiveLayoutProps) {
+export default function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   const [isMobile, setIsMobile] = useState(false);
   const { user } = useCurrentUser();
+  const pathname = usePathname();
 
   useEffect(() => {
     const handleResize = () => {
@@ -35,15 +31,18 @@ export default function ResponsiveLayout({
     return <>{children}</>;
   }
 
+  // Vérifier si on est sur la page reels
+  const isReelsPage = pathname === "/reels";
+
   // Version mobile
   if (isMobile) {
     return (
       <>
-        <MobileHeader onTabChange={onTabChange} defaultTab={defaultTab} />
+        <MobileHeader />
         <main className="pt-16 pb-20">
           {children}
         </main>
-        <MobileBottomNav />
+        {!isReelsPage && <MobileBottomNav />}
       </>
     );
   }

@@ -381,7 +381,7 @@ export default function PostCard({ post }: { post: Post }) {
 
       {/* ── Médias ── */}
       {post.medias.length > 0 && current && (
-        <Link href={`/post/${post.id}`}>
+        <Link href={isReel && !isPaid ? `/reels?id=${post.id}` : `/post/${post.id}`}>
           <div className="relative overflow-hidden bg-black rounded-sm shadow-[0_20px_50px_rgba(0,0,0,0.5)] aspect-[4/5] max-w-[420px]">
 
             {isPaid && post.previewUrl ? (
@@ -440,7 +440,7 @@ export default function PostCard({ post }: { post: Post }) {
                   <rect x="2" y="2" width="20" height="20" rx="2"/>
                   <path d="M7 2v20M17 2v20M2 12h20"/>
                 </svg>
-                {/* RÉEL */}
+                RÉEL
               </div>
             )}
 
