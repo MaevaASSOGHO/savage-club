@@ -16,14 +16,26 @@ type User = {
   createdAt: Date;
 };
 
-type WithdrawalRequest = {
+type RecentPayment = {
   id:          string;
   amount:      number;
-  fee:         number;
-  net:         number;
-  status:      string;
-  phoneNumber: string | null;
+  type:        string;
   createdAt:   string;
+};
+
+type WithdrawalRequest = {
+  id:             string;
+  amount:         number;
+  fee:            number;
+  net:            number;
+  status:         string;
+  phoneNumber:    string | null;
+  withdrawMode:   string | null;
+  createdAt:      string;
+  walletBalance:  number;
+  totalEarned:    number;
+  totalWithdrawn: number;
+  recentPayments: RecentPayment[];
   user: {
     id:          string;
     username:    string;
@@ -39,6 +51,23 @@ type Stats = {
   verified:      number;
   pending:       number;
   totalPosts:    number;
+};
+
+const REJECT_REASONS = [
+  "Solde insuffisant pour couvrir le montant demandé",
+  "Informations de compte Mobile Money incorrectes",
+  "Activité suspecte détectée sur le compte",
+  "Documents d'identité non vérifiés",
+  "Montant dépasse le plafond autorisé",
+  "Retrait trop fréquent — réessayez dans 24h",
+];
+
+const PAYMENT_TYPE_LABELS: Record<string, string> = {
+  SUBSCRIPTION:   "Abonnement",
+  MESSAGE:        "Contenu payant",
+  AUDIO_CALL:     "Appel audio",
+  VIDEO_CALL:     "Appel vidéo",
+  CUSTOM_CONTENT: "Contenu personnalisé",
 };
 
 function StatCard({ label, value, icon, color }: { label: string; value: number; icon: string; color: string }) {
@@ -68,6 +97,240 @@ function UserAvatar({ user }: { user: User | WithdrawalRequest["user"] }) {
   );
 }
 
+// ── Modale de rejet ────────────────────────────────────────────────────────
+function RejectModal({
+  withdrawal,
+  onClose,
+  onConfirm,
+}: {
+  withdrawal: WithdrawalRequest;
+  onClose:    () => void;
+  onConfirm:  (reason: string, message: string) => void;
+}) {
+  const [selectedReason, setSelectedReason] = useState("");
+  const [customMessage,  setCustomMessage]  = useState("");
+
+  const canConfirm = selectedReason.trim().length > 0;
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/80 z-50" onClick={onClose}/>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="bg-[#1E0A3C] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
+            <p className="text-white font-bold">Rejeter le retrait</p>
+            <button onClick={onClose} className="text-white/30 hover:text-white transition-colors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+
+          <div className="p-5 space-y-4">
+            {/* Récap du retrait */}
+            <div className="bg-white/5 border border-white/8 rounded-xl p-4 text-sm space-y-1">
+              <p className="text-white font-semibold">{withdrawal.user.displayName ?? withdrawal.user.username}</p>
+              <p className="text-white/40">{withdrawal.amount.toLocaleString("fr-FR")} FCFA · {withdrawal.phoneNumber}</p>
+            </div>
+
+            {/* Raisons pré-écrites */}
+            <div className="space-y-1.5">
+              <p className="text-white/40 text-xs font-medium uppercase tracking-wider">Raison du rejet</p>
+              <div className="space-y-2">
+                {REJECT_REASONS.map((reason) => (
+                  <button
+                    key={reason}
+                    onClick={() => setSelectedReason(reason)}
+                    className={`w-full text-left px-4 py-2.5 rounded-xl text-sm transition-all border ${
+                      selectedReason === reason
+                        ? "bg-red-500/15 border-red-500/40 text-red-300"
+                        : "bg-white/3 border-white/8 text-white/60 hover:border-white/20 hover:text-white"
+                    }`}
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Message personnalisé */}
+            <div className="space-y-1.5">
+              <p className="text-white/40 text-xs font-medium uppercase tracking-wider">
+                Message complémentaire (optionnel)
+              </p>
+              <textarea
+                value={customMessage}
+                onChange={(e) => setCustomMessage(e.target.value)}
+                placeholder="Précisez si nécessaire..."
+                rows={3}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/25 outline-none focus:border-red-400/50 resize-none transition-colors"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button onClick={onClose}
+                className="flex-1 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white font-medium py-2.5 rounded-xl text-sm transition-all">
+                Annuler
+              </button>
+              <button
+                onClick={() => onConfirm(selectedReason, customMessage)}
+                disabled={!canConfirm}
+                className="flex-1 bg-red-500 hover:bg-red-400 disabled:opacity-30 text-white font-bold py-2.5 rounded-xl text-sm transition-all"
+              >
+                Confirmer le rejet
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Modale détail retrait ──────────────────────────────────────────────────
+function WithdrawalDetailModal({
+  withdrawal,
+  onClose,
+  onApprove,
+  onReject,
+  loading,
+}: {
+  withdrawal: WithdrawalRequest;
+  onClose:    () => void;
+  onApprove:  () => void;
+  onReject:   () => void;
+  loading:    boolean;
+}) {
+  // Vérification de sécurité — solde cohérent avec les gains
+  const expectedMax  = withdrawal.totalEarned - withdrawal.totalWithdrawn;
+  const isInconsistent = withdrawal.walletBalance > expectedMax * 1.05; // tolérance 5%
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/80 z-50" onClick={onClose}/>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="bg-[#1E0A3C] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
+            <p className="text-white font-bold">Détail du retrait</p>
+            <button onClick={onClose} className="text-white/30 hover:text-white transition-colors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+
+          <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+
+            {/* Alerte sécurité */}
+            {isInconsistent && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-start gap-3">
+                <span className="text-red-400 text-lg flex-shrink-0">⚠️</span>
+                <div>
+                  <p className="text-red-400 font-bold text-sm">Incohérence détectée</p>
+                  <p className="text-red-400/70 text-xs mt-0.5">
+                    Le solde ({withdrawal.walletBalance.toLocaleString("fr-FR")} pts) dépasse le maximum attendu ({expectedMax.toLocaleString("fr-FR")} pts). Vérifiez avant de valider.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Infos utilisateur */}
+            <div className="flex items-center gap-3">
+              <UserAvatar user={withdrawal.user}/>
+              <div>
+                <p className="text-white font-semibold text-sm">{withdrawal.user.displayName ?? withdrawal.user.username}</p>
+                <p className="text-white/40 text-xs">{withdrawal.user.email}</p>
+              </div>
+            </div>
+
+            {/* Infos retrait */}
+            <div className="bg-white/5 border border-white/8 rounded-xl p-4 space-y-2 text-sm">
+              <p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-2">Détails du retrait</p>
+              <div className="flex justify-between">
+                <span className="text-white/40">Montant demandé</span>
+                <span className="text-white font-bold">{withdrawal.amount.toLocaleString("fr-FR")} FCFA</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/40">Frais MF (2%)</span>
+                <span className="text-red-400">- {withdrawal.fee.toLocaleString("fr-FR")} FCFA</span>
+              </div>
+              <div className="h-px bg-white/8"/>
+              <div className="flex justify-between font-bold">
+                <span className="text-white">À envoyer</span>
+                <span className="text-amber-400 text-base">{withdrawal.net.toLocaleString("fr-FR")} FCFA</span>
+              </div>
+              <div className="h-px bg-white/8"/>
+              <div className="flex justify-between">
+                <span className="text-white/40">Numéro</span>
+                <span className="text-white font-mono">{withdrawal.phoneNumber}</span>
+              </div>
+              {withdrawal.withdrawMode && (
+                <div className="flex justify-between">
+                  <span className="text-white/40">Opérateur</span>
+                  <span className="text-white">{withdrawal.withdrawMode}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Solde & stats wallet */}
+            <div className="bg-white/5 border border-white/8 rounded-xl p-4 space-y-2 text-sm">
+              <p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-2">Portefeuille</p>
+              <div className="flex justify-between">
+                <span className="text-white/40">Solde actuel</span>
+                <span className={`font-bold ${isInconsistent ? "text-red-400" : "text-green-400"}`}>
+                  {withdrawal.walletBalance.toLocaleString("fr-FR")} pts
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/40">Total gagné</span>
+                <span className="text-white">{withdrawal.totalEarned.toLocaleString("fr-FR")} pts</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/40">Total retiré</span>
+                <span className="text-white">{withdrawal.totalWithdrawn.toLocaleString("fr-FR")} pts</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/40">Solde attendu max</span>
+                <span className="text-white/60">{expectedMax.toLocaleString("fr-FR")} pts</span>
+              </div>
+            </div>
+
+            {/* Dernières ventes */}
+            {withdrawal.recentPayments.length > 0 && (
+              <div className="bg-white/5 border border-white/8 rounded-xl p-4">
+                <p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-3">5 dernières ventes</p>
+                <div className="space-y-2">
+                  {withdrawal.recentPayments.map((p) => (
+                    <div key={p.id} className="flex items-center justify-between text-xs">
+                      <span className="text-white/50">
+                        {PAYMENT_TYPE_LABELS[p.type] ?? p.type} — {new Date(p.createdAt).toLocaleDateString("fr-FR")}
+                      </span>
+                      <span className="text-green-400 font-medium">+{p.amount.toLocaleString("fr-FR")} FCFA</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-1">
+              <button onClick={onReject} disabled={loading}
+                className="flex-1 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 font-bold py-3 rounded-xl text-sm transition-all disabled:opacity-30">
+                ✕ Rejeter
+              </button>
+              <button onClick={onApprove} disabled={loading}
+                className="flex-1 bg-green-500 hover:bg-green-400 disabled:opacity-30 text-white font-bold py-3 rounded-xl text-sm transition-all">
+                {loading ? "..." : "✓ Valider le retrait"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── AdminClient principal ──────────────────────────────────────────────────
 export default function AdminClient({
   pendingUsers, verifiedUsers, stats,
 }: {
@@ -85,6 +348,10 @@ export default function AdminClient({
   const [wLoading,      setWLoading]      = useState(false);
   const [wLoaded,       setWLoaded]       = useState(false);
 
+  // Modales
+  const [selectedWithdrawal, setSelectedWithdrawal] = useState<WithdrawalRequest | null>(null);
+  const [rejectWithdrawal,   setRejectWithdrawal]   = useState<WithdrawalRequest | null>(null);
+
   function openPreview(user: User) {
     const urls = [user.idDocumentUrl, user.selfieUrl].filter(Boolean) as string[];
     setPreviewUrls(urls);
@@ -96,7 +363,7 @@ export default function AdminClient({
     setWLoading(true);
     const res  = await fetch("/api/admin/withdrawals");
     const data = await res.json();
-    setWithdrawals(data);
+    setWithdrawals(Array.isArray(data) ? data : []);
     setWLoaded(true);
     setWLoading(false);
   }
@@ -131,15 +398,31 @@ export default function AdminClient({
     setLoading(null);
   }
 
-  async function handleWithdrawal(withdrawalId: string, action: "approve" | "reject") {
+  async function handleApproveWithdrawal(withdrawalId: string) {
     setLoading(withdrawalId);
     const res = await fetch("/api/admin/withdrawals", {
       method:  "PATCH",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ withdrawalId, action }),
+      body:    JSON.stringify({ withdrawalId, action: "approve" }),
     });
     if (res.ok) {
       setWithdrawals((prev) => prev.filter((w) => w.id !== withdrawalId));
+      setSelectedWithdrawal(null);
+    }
+    setLoading(null);
+  }
+
+  async function handleRejectWithdrawal(withdrawalId: string, reason: string, message: string) {
+    setLoading(withdrawalId);
+    const res = await fetch("/api/admin/withdrawals", {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ withdrawalId, action: "reject", reason, message }),
+    });
+    if (res.ok) {
+      setWithdrawals((prev) => prev.filter((w) => w.id !== withdrawalId));
+      setRejectWithdrawal(null);
+      setSelectedWithdrawal(null);
     }
     setLoading(null);
   }
@@ -277,32 +560,79 @@ export default function AdminClient({
                   <span className="text-4xl">💸</span>
                   <p className="text-white/40 text-sm mt-3">Aucun retrait en attente</p>
                 </div>
-              ) : withdrawals.map((w) => (
-                <div key={w.id} className="bg-white/5 border border-white/8 rounded-2xl p-5 flex items-center gap-4">
-                  <UserAvatar user={w.user}/>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-semibold text-sm">{w.user.displayName ?? w.user.username}</p>
-                    <p className="text-white/40 text-xs mt-0.5">{w.user.email}</p>
-                    <p className="text-white/30 text-xs mt-0.5">
-                      📱 {w.phoneNumber} · Net : <span className="text-amber-400">{w.net.toLocaleString("fr-FR")} FCFA</span>
-                    </p>
-                    <p className="text-white/20 text-xs mt-0.5">
-                      Demande : {w.amount.toLocaleString("fr-FR")} FCFA — Frais : {w.fee.toLocaleString("fr-FR")} FCFA
-                    </p>
-                  </div>
+              ) : withdrawals.map((w) => {
+                const expectedMax    = w.totalEarned - w.totalWithdrawn;
+                const isInconsistent = w.walletBalance > expectedMax * 1.05;
 
-                  <div className="flex gap-2 flex-shrink-0">
-                    <button onClick={() => handleWithdrawal(w.id, "approve")} disabled={loading === w.id}
-                      className="bg-green-500 hover:bg-green-400 disabled:opacity-40 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all">
-                      {loading === w.id ? "..." : "✓ Valider"}
-                    </button>
-                    <button onClick={() => handleWithdrawal(w.id, "reject")} disabled={loading === w.id}
-                      className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 font-bold text-xs px-4 py-2 rounded-xl transition-all">
-                      ✕ Rejeter
-                    </button>
+                return (
+                  <div key={w.id}
+                    className={`bg-white/5 border rounded-2xl p-5 space-y-3 ${
+                      isInconsistent ? "border-red-500/40" : "border-white/8"
+                    }`}>
+                    {/* Alerte sécurité */}
+                    {isInconsistent && (
+                      <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 flex items-center gap-2">
+                        <span className="text-red-400">⚠️</span>
+                        <p className="text-red-400 text-xs font-medium">Incohérence de solde — vérifier avant de valider</p>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-4">
+                      <UserAvatar user={w.user}/>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-semibold text-sm">{w.user.displayName ?? w.user.username}</p>
+                        <p className="text-white/40 text-xs">{w.user.email}</p>
+                      </div>
+                      <button
+                        onClick={() => setSelectedWithdrawal(w)}
+                        className="bg-white/8 hover:bg-white/12 border border-white/10 text-white/60 hover:text-white text-xs px-3 py-2 rounded-xl transition-all flex-shrink-0">
+                        Voir détails
+                      </button>
+                    </div>
+
+                    {/* Infos clés */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-amber-400/10 border border-amber-400/20 rounded-xl px-3 py-2">
+                        <p className="text-white/40">À envoyer</p>
+                        <p className="text-amber-400 font-black text-base">{w.net.toLocaleString("fr-FR")} FCFA</p>
+                      </div>
+                      <div className="bg-white/3 border border-white/8 rounded-xl px-3 py-2">
+                        <p className="text-white/40">Numéro</p>
+                        <p className="text-white font-mono text-sm">{w.phoneNumber}</p>
+                        {w.withdrawMode && <p className="text-white/30 text-[10px]">{w.withdrawMode}</p>}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div className="bg-white/3 rounded-xl px-3 py-2 text-center">
+                        <p className="text-white/30">Solde</p>
+                        <p className={`font-bold ${isInconsistent ? "text-red-400" : "text-white"}`}>
+                          {w.walletBalance.toLocaleString("fr-FR")} pts
+                        </p>
+                      </div>
+                      <div className="bg-white/3 rounded-xl px-3 py-2 text-center">
+                        <p className="text-white/30">Total gagné</p>
+                        <p className="text-white font-bold">{w.totalEarned.toLocaleString("fr-FR")} pts</p>
+                      </div>
+                      <div className="bg-white/3 rounded-xl px-3 py-2 text-center">
+                        <p className="text-white/30">Total retiré</p>
+                        <p className="text-white font-bold">{w.totalWithdrawn.toLocaleString("fr-FR")} pts</p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button onClick={() => setRejectWithdrawal(w)} disabled={loading === w.id}
+                        className="flex-1 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 font-bold py-2 rounded-xl text-xs transition-all disabled:opacity-30">
+                        ✕ Rejeter
+                      </button>
+                      <button onClick={() => handleApproveWithdrawal(w.id)} disabled={loading === w.id}
+                        className="flex-1 bg-green-500 hover:bg-green-400 disabled:opacity-30 text-white font-bold py-2 rounded-xl text-xs transition-all">
+                        {loading === w.id ? "..." : "✓ Valider"}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -362,6 +692,26 @@ export default function AdminClient({
             </div>
           </div>
         </>
+      )}
+
+      {/* Modale détail retrait */}
+      {selectedWithdrawal && (
+        <WithdrawalDetailModal
+          withdrawal={selectedWithdrawal}
+          onClose={() => setSelectedWithdrawal(null)}
+          onApprove={() => handleApproveWithdrawal(selectedWithdrawal.id)}
+          onReject={() => { setRejectWithdrawal(selectedWithdrawal); setSelectedWithdrawal(null); }}
+          loading={loading === selectedWithdrawal.id}
+        />
+      )}
+
+      {/* Modale rejet */}
+      {rejectWithdrawal && (
+        <RejectModal
+          withdrawal={rejectWithdrawal}
+          onClose={() => setRejectWithdrawal(null)}
+          onConfirm={(reason, message) => handleRejectWithdrawal(rejectWithdrawal.id, reason, message)}
+        />
       )}
     </div>
   );
