@@ -63,5 +63,18 @@ export default async function AdminPage() {
     totalPosts:    await prisma.post.count({ where: { status: "PUBLISHED" } }),
   };
 
-  return <AdminClient pendingUsers={pendingUsers} verifiedUsers={verifiedUsers} stats={stats} />;
+  // Après les stats, avant le return
+  const systemUser = await prisma.user.findFirst({
+    where:  { email: "system@savage-club.app" },
+    select: { id: true },
+  });
+
+  return (
+    <AdminClient
+      pendingUsers={pendingUsers}
+      verifiedUsers={verifiedUsers}
+      stats={stats}
+      systemUserId={systemUser?.id ?? ""}
+    />
+  );
 }
