@@ -2,10 +2,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth-compat";
 import { prisma } from "@/lib/prisma";
+import { MediaType, PostVisibility } from "@prisma/client";
+import { randomUUID } from "crypto";
 
 type MediaInput = {
   url:        string;
-  type:       "IMAGE" | "VIDEO";
+  type:       "IMAGE" | "VIDEO" | "DOCUMENT";
   visibility: "PUBLIC" | "SUBSCRIBERS" | "PAID";
 };
 
@@ -17,25 +19,35 @@ export async function POST(req: NextRequest) {
   if (!Array.isArray(medias) || medias.length === 0)
     return NextResponse.json({ error: "Médias requis" }, { status: 400 });
 
-  // Créer un post par média (même structure que le reste de l'app)
-  const created = await Promise.all(
-    medias.map((m, i) =>
-      prisma.post.create({
-        data: {
-          userId:     session.user.id,
-          content:    "",
-          visibility: m.visibility,
-          PostMedia: {
-            create: {
-              url:   m.url,
-              type:  m.type,
-              order: i,
-            },
-          },
-        },
-      })
-    )
-  );
+  let count = 0;
+  const now = new Date();
 
-  return NextResponse.json({ ok: true, count: created.length });
+  for (let i = 0; i < medias.length; i++) {
+    const m      = medias[i];
+    const postId = randomUUID();
+
+    await prisma.post.create({
+      data: {
+        id:         postId,
+        userId:     session.user.id,
+        content:    "",
+        visibility: m.visibility as PostVisibility,
+        updatedAt:  now,
+      },
+    });
+
+    await prisma.postMedia.create({
+      data: {
+        id:     randomUUID(),
+        postId,
+        url:    m.url,
+        type:   m.type as MediaType,
+        order:  i,
+      },
+    });
+
+    count++;
+  }
+
+  return NextResponse.json({ ok: true, count });
 }

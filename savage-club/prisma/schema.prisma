@@ -468,6 +468,7 @@ enum MediaType {
   IMAGE
   VIDEO
   GALLERY
+  DOCUMENT
 }
 
 enum MessageType {
