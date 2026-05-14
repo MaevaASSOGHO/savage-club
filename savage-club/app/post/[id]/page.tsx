@@ -2,7 +2,6 @@
 import { getServerSession, authOptions } from "@/lib/auth-compat";
 import { prisma }     from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
-import Sidebar        from "@/components/Sidebar";
 import PostDetail     from "@/components/PostDetail";
 
 export const dynamic = "force-dynamic";
@@ -103,7 +102,6 @@ export default async function PostPage({
 
   return (
     <div className="flex min-h-screen bg-[#1a0533]">
-      <Sidebar />
       <main className="flex-1 flex items-center justify-center min-h-screen">
         <PostDetail
           post={{

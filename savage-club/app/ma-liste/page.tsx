@@ -1,10 +1,7 @@
-import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/ma-liste/page.tsx
+import { getServerSession, authOptions } from "@/lib/auth-compat";
 import { prisma } from "@/lib/prisma";
-
-
 import { redirect } from "next/navigation";
-import Sidebar from "@/components/Sidebar";
 import MaListeClient from "./MaListeClient";
 
 export default async function MaListePage() {
@@ -105,7 +102,7 @@ export default async function MaListePage() {
 
   return (
     <div className="flex min-h-screen bg-[#1a0533]">
-      <Sidebar />
+      {/* < /> */}
       <main className="flex-1 px-4 py-6">
         <div className="max-w-7xl mx-auto">     
           <MaListeClient

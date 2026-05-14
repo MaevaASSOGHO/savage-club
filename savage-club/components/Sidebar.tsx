@@ -148,7 +148,7 @@ export default function Sidebar() {
         className={`
           fixed left-0 top-0 h-screen z-50
           transition-all duration-300 ease-in-out
-          bg-[#1a0533]/95 backdrop-blur-xl
+          bg-[#1a0533]/95
           border-r border-white/10
           overflow-hidden
           flex flex-col

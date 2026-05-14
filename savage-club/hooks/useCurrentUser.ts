@@ -1,7 +1,7 @@
 // hooks/useCurrentUser.ts
 "use client";
 
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 import { useSession } from "next-auth/react";
 
 type CurrentUser = {
@@ -13,25 +13,19 @@ type CurrentUser = {
   isVerified: boolean;
 } | null;
 
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
 export function useCurrentUser() {
-  const { data: session, status } = useSession();
-  const [user, setUser] = useState<CurrentUser>(null);
-  const [loading, setLoading] = useState(true);
+  const { status } = useSession();
 
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      setUser(null);
-      setLoading(false);
-      return;
-    }
-    if (status !== "authenticated") return;
+  const { data, isLoading } = useSWR(
+    status === "authenticated" ? "/api/me" : null,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
 
-    fetch("/api/me")
-      .then((r) => r.json())
-      .then((data) => setUser(data))
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
-  }, [status]);
-
-  return { user, loading };
+  return {
+    user: (data ?? null) as CurrentUser,
+    loading: isLoading,
+  };
 }

@@ -4,7 +4,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import Sidebar from "@/components/Sidebar";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 type MediaPreview = {
@@ -220,7 +219,7 @@ export default function CreatePage() {
 
   return (
     <div className="flex min-h-screen bg-[#3B0764]">
-      <Sidebar />
+      {/* < /> */}
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-xl mx-auto px-4 py-8">
 

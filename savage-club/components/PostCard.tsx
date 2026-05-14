@@ -49,6 +49,17 @@ type Collection = {
   name: string;
 };
 
+type InitialData = {
+  collections?: Collection[];
+  saved?: boolean;
+  collectionId?: string | null;
+  fired?: boolean;
+  sparked?: boolean;
+  idea?: boolean;
+  likeCount?: number;
+  subscriptionTier?: "NONE" | "FREE" | "SAVAGE" | "VIP";
+};
+
 function IconComment() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -118,22 +129,22 @@ function formatPostDate(dateStr: string | Date): string {
   });
 }
 
-export default function PostCard({ post }: { post: Post }) {
+export default function PostCard({ post, initialData = {} }: { post: Post; initialData?: InitialData }) {
   const [mediaIndex, setMediaIndex] = useState(0);
 
-  // Réactions
-  const [fired, setFired] = useState(false);
-  const [fireCount, setFireCount] = useState(post.likes?.length ?? 0);
-  const [sparked, setSparked] = useState(false);
-  const [idea, setIdea] = useState(false);
+  // Réactions — initialisées depuis le serveur, zéro fetch au montage
+  const [fired, setFired] = useState(initialData.fired ?? false);
+  const [fireCount, setFireCount] = useState(initialData.likeCount ?? post.likes?.length ?? 0);
+  const [sparked, setSparked] = useState(initialData.sparked ?? false);
+  const [idea, setIdea] = useState(initialData.idea ?? false);
   const [shared, setShared] = useState(false);
 
-  // Sauvegarde
-  const [saved, setSaved] = useState(false);
+  // Sauvegarde — initialisée depuis le serveur
+  const [saved, setSaved] = useState(initialData.saved ?? false);
   const [savingLoading, setSavingLoading] = useState(false);
-  const [collections, setCollections] = useState<Collection[]>([]);
+  const [collections, setCollections] = useState<Collection[]>(initialData.collections ?? []);
   const [showCollectionMenu, setShowCollectionMenu] = useState(false);
-  const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
+  const [selectedCollection, setSelectedCollection] = useState<string | null>(initialData.collectionId ?? null);
   const [loadingCollections, setLoadingCollections] = useState(false);
 
   // Commentaires
@@ -145,68 +156,23 @@ export default function PostCard({ post }: { post: Post }) {
   const [commentText, setCommentText] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Abonnement
+  // Abonnement — initialisé depuis le serveur
   const [subscribeModalOpen, setSubscribeModalOpen] = useState(false);
-  const [currentTier, setCurrentTier] = useState<"NONE" | "FREE" | "SAVAGE" | "VIP">("NONE");
+  const [currentTier, setCurrentTier] = useState<"NONE" | "FREE" | "SAVAGE" | "VIP">(
+    initialData.subscriptionTier ?? "NONE"
+  );
 
   const { data: session } = useSession();
-  const { status } = useSession();
 
-  useEffect(() => {
-    if (status !== "authenticated") return;
-    fetch("/api/collections")
-      .then((r) => r.json())
-      .then((data) => setCollections(Array.isArray(data) ? data : []))
-      .catch(() => {});
-  }, [status]);
-
-  // Charger le tier d'abonnement au créateur
-  useEffect(() => {
-    if (!session?.user?.id) return;
-    fetch(`/api/subscriptions?creatorId=${post.user.id}`)
-      .then((r) => r.json())
-      .then((data) => setCurrentTier(data.tier ?? "NONE"))
-      .catch(() => {});
-  }, [session, post.user.id]);
-
-  // Charger les réactions
-  useEffect(() => {
-    fetch(`/api/posts/${post.id}/reactions`)
-      .then((r) => r.json())
-      .then((data) => {
-        setFired(data.liked ?? false);
-        setSparked(data.sparked ?? false);
-        setIdea(data.idea ?? false);
-        setFireCount(data.likeCount ?? post.likes.length);
-      })
-      .catch(() => {});
-  }, [post.id]);
-
-  // Charger l'état de sauvegarde et les collections
-  useEffect(() => {
-    fetch(`/api/saved-posts/${post.id}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setSaved(data.saved ?? false);
-        setSelectedCollection(data.collectionId ?? null);
-      })
-      .catch(() => {});
-
-    fetch("/api/collections")
-      .then((r) => r.json())
-      .then((data) => setCollections(data))
-      .catch(() => {});
-  }, [post.id]);
-
-  // Charger les commentaires
+  // Seul fetch conservé au montage : commentaires, uniquement à la demande
   useEffect(() => {
     if (!showComments) return;
     setLoadingComments(true);
     fetch(`/api/posts/${post.id}/comments`)
       .then((r) => r.json())
-      .then((data) => { 
-        setComments(data); 
-        setCommentCount(data.length); 
+      .then((data) => {
+        setComments(data);
+        setCommentCount(data.length);
       })
       .finally(() => setLoadingComments(false));
   }, [showComments, post.id]);
@@ -216,13 +182,13 @@ export default function PostCard({ post }: { post: Post }) {
     setFired(next);
     setFireCount((c) => c + (next ? 1 : -1));
     await fetch(`/api/posts/${post.id}/reactions`, {
-      method: "POST", 
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "LIKE" }),
     });
     if (next) {
       await fetch("/api/notifications", {
-        method: "POST", 
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "LIKE", postId: post.id, receiverId: post.user.id }),
       });
@@ -232,7 +198,7 @@ export default function PostCard({ post }: { post: Post }) {
   async function handleSparkle() {
     setSparked((v) => !v);
     await fetch(`/api/posts/${post.id}/reactions`, {
-      method: "POST", 
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "SPARKLE" }),
     });
@@ -241,7 +207,7 @@ export default function PostCard({ post }: { post: Post }) {
   async function handleIdea() {
     setIdea((v) => !v);
     await fetch(`/api/posts/${post.id}/reactions`, {
-      method: "POST", 
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "IDEA" }),
     });
@@ -256,25 +222,22 @@ export default function PostCard({ post }: { post: Post }) {
   async function handleSave(collectionId?: string) {
     if (savingLoading) return;
     setSavingLoading(true);
-    
+
     const next = !saved;
-    
+
     if (next && collections.length > 0 && collectionId === undefined) {
       setShowCollectionMenu(true);
       setSavingLoading(false);
       return;
     }
-    
+
     try {
       const res = await fetch("/api/saved-posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          postId: post.id, 
-          collectionId: collectionId || null 
-        }),
+        body: JSON.stringify({ postId: post.id, collectionId: collectionId || null }),
       });
-      
+
       if (res.ok) {
         const data = await res.json();
         setSaved(data.saved);
@@ -283,7 +246,7 @@ export default function PostCard({ post }: { post: Post }) {
     } catch (error) {
       console.error("Erreur lors de la sauvegarde:", error);
     }
-    
+
     setSavingLoading(false);
     setShowCollectionMenu(false);
   }
@@ -294,10 +257,7 @@ export default function PostCard({ post }: { post: Post }) {
 
   async function handleRemoveFromSaved() {
     try {
-      const res = await fetch(`/api/saved-posts/${post.id}`, {
-        method: "DELETE",
-      });
-      
+      const res = await fetch(`/api/saved-posts/${post.id}`, { method: "DELETE" });
       if (res.ok) {
         setSaved(false);
         setSelectedCollection(null);
@@ -311,7 +271,7 @@ export default function PostCard({ post }: { post: Post }) {
     if (!commentText.trim() || submitting) return;
     setSubmitting(true);
     const res = await fetch("/api/comments", {
-      method: "POST", 
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ postId: post.id, text: commentText }),
     });
@@ -321,7 +281,7 @@ export default function PostCard({ post }: { post: Post }) {
       setCommentCount((c) => c + 1);
       setCommentText("");
       await fetch("/api/notifications", {
-        method: "POST", 
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "COMMENT", postId: post.id, receiverId: post.user.id }),
       });
@@ -350,14 +310,13 @@ export default function PostCard({ post }: { post: Post }) {
             }
           </div>
         </Link>
-        
+
         <div className="flex items-center gap-1.5 flex-1">
           <Link href={`/profil/${post.user.username}`} className="text-white font-semibold text-sm hover:text-amber-400 transition-colors">
             {post.user.displayName ?? post.user.username}
           </Link>
           {post.user.isVerified && <VerifiedBadge />}
 
-          {/* Bouton S'abonner — ouvre SubscribeModal, affiche le tier actuel */}
           {session?.user?.id !== post.user.id && (
             <button
               onClick={() => setSubscribeModalOpen(true)}
@@ -367,13 +326,13 @@ export default function PostCard({ post }: { post: Post }) {
                   : "text-white/40 border border-white/20 hover:bg-white/10"
               }`}
             >
-              {currentTier === "NONE"    ? "S'abonner"  :
-               currentTier === "FREE"    ? "✓ Abonné"   :
-               currentTier === "VIP"     ? "✓ VIP"      : "✓ Savage"}
+              {currentTier === "NONE"  ? "S'abonner" :
+               currentTier === "FREE"  ? "✓ Abonné"  :
+               currentTier === "VIP"   ? "✓ VIP"     : "✓ Savage"}
             </button>
           )}
         </div>
-        
+
         <div className="flex-shrink-0">
           <ReportButton type="post" id={post.id} variant="icon" />
         </div>
@@ -592,15 +551,15 @@ export default function PostCard({ post }: { post: Post }) {
 
           <div className="flex items-center gap-2 border-t border-white/8 pt-3">
             <input
-              type="text" 
+              type="text"
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && submitComment()}
               placeholder="Ajouter un commentaire..."
               className="flex-1 bg-transparent text-white text-xs placeholder-white/25 outline-none"
             />
-            <button 
-              onClick={submitComment} 
+            <button
+              onClick={submitComment}
               disabled={!commentText.trim() || submitting}
               className="text-amber-400 text-xs font-bold disabled:opacity-25 hover:text-amber-300 transition-colors"
             >

@@ -4,7 +4,7 @@ import { getServerSession, authOptions } from "@/lib/auth-compat";
 
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import Sidebar from "@/components/Sidebar";
+// import Sidebar from "@/components/Sidebar";
 import ParametresClient from "@/components/parametres/ParametresClient";
 
 export default async function ParametresPage() {
@@ -40,7 +40,6 @@ export default async function ParametresPage() {
 
   return (
     <div className="flex min-h-screen bg-[#3B0764]">
-      <Sidebar />
       <ParametresClient user={user} />
     </div>
   );

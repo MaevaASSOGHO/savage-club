@@ -2,7 +2,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Sidebar from "@/components/Sidebar";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
@@ -37,9 +36,10 @@ export default function FeedLayout({
 
   return (
     <div className={`flex min-h-screen ${bg}`}>
-      <Sidebar />
+      {/* Spacer fixe qui réserve l'espace de la sidebar dans le flux */}
+      {/* <div className="w-[80px] flex-shrink-0 hidden md:block" /> */}
 
-      <main className="flex-1 flex justify-center px-4 py-6">
+      <main className="md:pl-[80px] flex justify-center">
         <div className="w-full max-w-xl flex flex-col gap-6 animate-fade-in">
           {children}
         </div>

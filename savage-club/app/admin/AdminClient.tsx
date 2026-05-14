@@ -1,7 +1,6 @@
 // app/admin/AdminClient.tsx
 "use client";
 import { useState } from "react";
-import Sidebar              from "@/components/Sidebar";
 import AdminStats           from "./components/AdminStats";
 import AdminVerifications   from "./components/AdminVerifications";
 import AdminVerified        from "./components/AdminVerified";
@@ -43,7 +42,6 @@ export default function AdminClient({
 
   return (
     <div className="flex min-h-screen bg-[#1a0533]">
-      <Sidebar />
       <main className="flex-1 px-6 py-8 overflow-y-auto">
         <div className="max-w-4xl mx-auto space-y-8">
 

@@ -1,6 +1,8 @@
 // auth.ts
 import Credentials from "next-auth/providers/credentials";
 import * as NextAuthModule from "next-auth";
+import { prisma } from "@/lib/prisma";
+
 const NextAuth = (NextAuthModule as any).default ?? NextAuthModule;
 
 const API_URL = process.env.API_URL || "http://localhost:3001";
@@ -9,10 +11,10 @@ const result = NextAuth({
   providers: [
     Credentials({
       credentials: {
-        email:    { label: "Email",        type: "email" },
+        email:    { label: "Email",        type: "email"    },
         password: { label: "Mot de passe", type: "password" },
-        name:     { label: "Nom",          type: "text" },
-        mode:     { label: "Mode",         type: "text" },
+        name:     { label: "Nom",          type: "text"     },
+        mode:     { label: "Mode",         type: "text"     },
       },
       async authorize(credentials) {
         const mode  = (credentials?.mode     ?? "") as string;
@@ -51,17 +53,45 @@ const result = NextAuth({
   },
   session: { strategy: "jwt" },
   callbacks: {
-    jwt({ token, user }: any) {
+    async jwt({ token, user, trigger, session: updatedSession }: any) {
+      // ── Premier login : stocker id + accessToken ──────────────────────────
       if (user) {
         token.id          = user.id;
         token.accessToken = user.accessToken;
       }
+
+      // ── Charger role / onboardingStep / username depuis Prisma ────────────
+      // Déclenché si l'un des champs est absent du token :
+      // - premier login (token vierge)
+      // - tokens existants créés avant l'ajout de ces champs
+      // Sans ce bloc, onboardingStep = undefined → 0 < maxStep → boucle infinie
+      const userId = token.id ?? user?.id;
+      if (userId && (token.role === undefined || token.onboardingStep === undefined)) {
+        const dbUser = await prisma.user.findUnique({
+          where:  { id: userId },
+          select: { role: true, onboardingStep: true, username: true },
+        });
+        token.role           = dbUser?.role           ?? "USER";
+        token.onboardingStep = dbUser?.onboardingStep ?? 0;
+        token.username       = dbUser?.username       ?? null;
+      }
+
+      // ── Mise à jour manuelle via update() côté client ────────────────────
+      // Appelé depuis la page onboarding : await update({ onboardingStep: n })
+      if (trigger === "update" && updatedSession?.onboardingStep !== undefined) {
+        token.onboardingStep = updatedSession.onboardingStep;
+      }
+
       return token;
     },
+
     session({ session, token }: any) {
       if (session.user) {
-        session.user.id          = token.id;
-        session.user.accessToken = token.accessToken;
+        session.user.id             = token.id;
+        session.user.accessToken    = token.accessToken;
+        session.user.role           = token.role           ?? "USER";
+        session.user.onboardingStep = token.onboardingStep ?? 0;
+        session.user.username       = token.username       ?? null;
       }
       return session;
     },

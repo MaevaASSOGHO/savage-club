@@ -165,7 +165,6 @@ function MessagesInner() {
 export default function MessagesPage() {
   return (
     <div className="flex h-screen bg-[#1a0533] overflow-hidden">
-      <Sidebar />
       <Suspense fallback={
         <div className="flex-1 flex items-center justify-center">
           <svg className="animate-spin w-6 h-6 text-amber-400" viewBox="0 0 24 24" fill="none">

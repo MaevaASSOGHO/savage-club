@@ -2,9 +2,6 @@ import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/profil/[username]/page.tsx
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
-
-
-import Sidebar from "@/components/Sidebar";
 import ProfileHeader from "@/components/profile/ProfileHeader";
 import ProfileStats from "@/components/profile/ProfileStats";
 import ProfileActions, { SubscriptionTier } from "@/components/profile/ProfileActions";
@@ -58,7 +55,6 @@ export default async function ProfilePage({
 
   return (
     <div className="flex min-h-screen bg-[#1a0533]">
-      <Sidebar />
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-8">
 

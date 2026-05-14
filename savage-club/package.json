@@ -30,7 +30,8 @@
     "react-dom": "19.2.3",
     "resend": "^6.12.2",
     "serwist": "^9.5.11",
-    "stripe": "^21.0.0"
+    "stripe": "^21.0.0",
+    "swr": "^2.4.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

@@ -1,4 +1,4 @@
-// app/layout.tsx (mise à jour)
+// app/layout.tsx
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -7,24 +7,14 @@ import AntiCapture from "@/components/AntiCapture";
 import GlobalWatermark from "@/components/GlobalWatermark";
 import Providers from "./providers";
 import ResponsiveLayout from "@/components/ResponsiveLayout";
+import Sidebar from "@/components/Sidebar";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: {
-    default: "Savage Club",
-    template: "%s • Savage Club",
-  },
-  description:
-    "La plateforme exclusive des créateurs Savage. Abonnez-vous, découvrez des contenus uniques et interagissez avec vos créateurs préférés.",
+  title: { default: "Savage Club", template: "%s • Savage Club" },
+  description: "La plateforme exclusive des créateurs Savage. Abonnez-vous, découvrez des contenus uniques et interagissez avec vos créateurs préférés.",
   applicationName: "Savage Club",
   authors: [{ name: "Savage Club" }],
   generator: "Next.js",
@@ -37,61 +27,48 @@ export const metadata: Metadata = {
       { url: "/icons/icon-192.png",    sizes: "192x192", type: "image/png" },
     ],
     shortcut: "/favicon.ico",
-    apple: [
-      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
-    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
   openGraph: {
-    type: "website",
-    locale: "fr_FR",
-    url: "https://savage-club.vercel.app",
-    siteName: "Savage Club",
+    type: "website", locale: "fr_FR",
+    url: "https://savage-club.vercel.app", siteName: "Savage Club",
     title: "Savage Club",
-    description:
-      "La plateforme exclusive qui rémunère les créateurs africains. Abonnez-vous, découvrez des contenus uniques.",
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "Savage Club",
-      },
-    ],
+    description: "La plateforme exclusive qui rémunère les créateurs africains. Abonnez-vous, découvrez des contenus uniques.",
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "Savage Club" }],
   },
   twitter: {
-    card: "summary_large_image",
-    title: "Savage Club",
-    description:
-      "La plateforme exclusive qui rémunère les créateurs africains.",
+    card: "summary_large_image", title: "Savage Club",
+    description: "La plateforme exclusive qui rémunère les créateurs africains.",
     images: ["/og-image.png"],
   },
   robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-image-preview": "large",
-      "max-snippet": -1,
-    },
+    index: true, follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1 },
   },
   metadataBase: new URL("https://savage-club.vercel.app"),
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased text-white bg-gradient-to-b from-[#0a0218] to-[#1a0533] min-h-screen`}>
+      <body className="...">
         <NextAuthProvider>
-          <AntiCapture /> 
+          <AntiCapture />
           <Providers>
-            <ResponsiveLayout>
-              {children}
-            </ResponsiveLayout>
+            <div className="flex min-h-screen">
+              <Sidebar />
+              {/*
+                md:ml-[80px] = largeur de la sidebar repliée (état par défaut).
+                Sur mobile : ml-0 car la sidebar est cachée (retourne null).
+                La sidebar élargie (220px au hover) est en fixed et passe
+                par-dessus le contenu temporairement — comportement voulu.
+              */}
+              <div className="flex-1 flex flex-col min-w-0 md:ml-[80px]">
+                <ResponsiveLayout>
+                  {children}
+                </ResponsiveLayout>
+              </div>
+            </div>
           </Providers>
         </NextAuthProvider>
       </body>

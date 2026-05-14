@@ -159,6 +159,7 @@ model Message {
 
   @@index([conversationId, createdAt])
   @@index([senderId])
+  @@index([conversationId])
 }
 
 model Notification {
@@ -179,6 +180,8 @@ model Notification {
   User_Notification_receiverIdToUser User             @relation("Notification_receiverIdToUser", fields: [receiverId], references: [id], onDelete: Cascade)
   Reel                               Reel?            @relation(fields: [reelId], references: [id])
   User_Notification_senderIdToUser   User?            @relation("Notification_senderIdToUser", fields: [senderId], references: [id])
+
+  @@index([receiverId, isRead])
 }
 
 model Payment {
@@ -229,6 +232,8 @@ model Post {
   Reaction     Reaction[]
   Report       Report[]
   SavedPost    SavedPost[]
+
+  @@index([userId, createdAt])
 }
 
 model PostMedia {
@@ -327,6 +332,7 @@ model Subscription {
   @@index([creatorId])
   @@index([status])
   @@index([subscriberId])
+  @@index([subscriberId, status])
 }
 
 model User {
@@ -357,6 +363,8 @@ model User {
   acceptedCGUAt                                DateTime?                 @db.Timestamp(6)
   selfieUrl                                    String?
   verificationStatus                           String                    @default("NONE")
+  onboardingStep  Int      @default(0)
+  interests       String[] @default([])
   Booking_Booking_creatorIdToUser              Booking[]                 @relation("Booking_creatorIdToUser")
   Booking_Booking_requesterIdToUser            Booking[]                 @relation("Booking_requesterIdToUser")
   Collection                                   Collection[]

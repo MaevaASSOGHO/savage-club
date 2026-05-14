@@ -4,7 +4,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import MediaCard from '@/components/Discover/MediaCard';
 import { useSession } from 'next-auth/react';
-import Sidebar from "@/components/Sidebar";
 
 type Media = {
   id:         string;
@@ -127,7 +126,7 @@ export default function DecouvrirPage() {
       `}</style>
 
       <main className="flex min-h-screen bg-[#1a0533]">
-        <Sidebar />
+        {/* < /> */}
 
         {/* px-0.5 sur mobile → quasi bord à bord ; px-4 sur desktop */}
         <div className="w-full px-0.5 md:container md:mx-auto md:px-4 py-6">
