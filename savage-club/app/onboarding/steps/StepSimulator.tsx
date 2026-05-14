@@ -13,7 +13,7 @@ type Props = { role: string; onNext: () => void };
 
 function useAnimatedNumber(target: number, duration = 600) {
   const [display, setDisplay] = useState(target);
-  const rafRef = useRef<number>();
+  const rafRef = useRef<number | null>(null);
   const startRef = useRef<{ from: number; time: number } | null>(null);
 
   useEffect(() => {
