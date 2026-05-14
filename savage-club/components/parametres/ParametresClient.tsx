@@ -76,13 +76,6 @@ export default function ParametresClient({ user }: { user: User }) {
   const [isMobile, setIsMobile] = useState(false);
   const [selectedSection, setSelectedSection] = useState<Section | null>(null);
 
-  // Redirection vers les pages externes selon la section choisie
-  useEffect(() => {
-    if (selectedSection && EXTERNAL_ROUTES[selectedSection]) {
-      router.push(EXTERNAL_ROUTES[selectedSection]!);
-    }
-  }, [selectedSection, router]);
-
   // Détecter la taille de l'écran
   useEffect(() => {
     const handleResize = () => {
