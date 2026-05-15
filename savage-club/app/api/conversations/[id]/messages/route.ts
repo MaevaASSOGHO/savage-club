@@ -180,9 +180,9 @@ export async function POST(
   const dec = decryptMessage({ content: result.content, mediaUrl: result.mediaUrl, iv: result.iv });
   const messagePayload = { ...result, ...dec, locked: false };
 
+  const pusherInstance = await getPusher();
   await Promise.all(
-    others.map((other) =>
-      pusher.trigger(`private-user-${other.userId}`, "new-message", {
+    others.map((other) => pusherInstance.trigger(`private-user-${other.userId}`, "new-message", {
         // Nouveau message complet pour l'afficher dans la conversation
         message: messagePayload,
         conversationId,

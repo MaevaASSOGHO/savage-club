@@ -25,7 +25,8 @@ export async function POST(req: NextRequest) {
   if (channel !== `private-user-${user.id}`) {
     return NextResponse.json({ error: "Interdit" }, { status: 403 });
   }
+  const pusherInstance = await getPusher();
+  const authResponse = pusherInstance.authorizeChannel(socketId, channel);
 
-  const authResponse = pusher.authorizeChannel(socketId, channel);
   return NextResponse.json(authResponse);
 }
