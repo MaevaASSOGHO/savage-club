@@ -2,7 +2,7 @@ import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/notifications/route.ts
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { pusher } from "@/lib/pusher";
+import { getPusher } from "@/lib/pusher";
 
 // Correction du type : content peut être null
 type NotificationWithSender = {
@@ -205,7 +205,7 @@ export async function POST(req: Request) {
   const unreadCount = await prisma.notification.count({
     where: { receiverId, isRead: false },
   });
-
+  const pusher = await getPusher();
   await pusher.trigger(`private-user-${receiverId}`, "new-notification", {
     // Données de la notif pour l'afficher dans le panel
     id:         notification.id,

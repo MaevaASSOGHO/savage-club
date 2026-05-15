@@ -1,9 +1,8 @@
 import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/conversations/route.ts
 import { prisma } from "@/lib/prisma";
-import { pusher } from "@/lib/pusher";
 import { NextResponse } from "next/server";
-
+import { getPusher } from "@/lib/pusher";
 // GET /api/conversations — liste toutes les conversations de l'utilisateur
 // Une seule query optimisée avec lastMessage + unreadCount
 export async function GET(req: Request) {
@@ -219,6 +218,7 @@ export async function POST(req: Request) {
 
   // Pusher — notifier le destinataire si un premier message a été envoyé
   if (result.message && result.isNew) {
+    const pusher = await getPusher();
     await pusher.trigger(`private-user-${recipientId}`, "new-message", {
       message: result.message,
       conversationId: result.conversationId,
