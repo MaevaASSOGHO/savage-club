@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth-compat";
 import { authOptions } from "@/lib/auth-compat";
-import { pusher } from "@/lib/pusher";
+import { getPusher } from "@/lib/pusher";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {

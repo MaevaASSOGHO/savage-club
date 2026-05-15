@@ -1,7 +1,7 @@
 import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/conversations/[id]/messages/route.ts
 import { prisma } from "@/lib/prisma";
-import { pusher } from "@/lib/pusher";
+import { getPusher } from "@/lib/pusher";
 import { NextResponse } from "next/server";
 import { encryptMessage, decryptMessage } from "@/lib/encryption";
 
