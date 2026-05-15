@@ -1,9 +1,8 @@
 import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/notifications/route.ts
 import { prisma } from "@/lib/prisma";
-
 import { NextResponse } from "next/server";
-
+import { pusher } from "@/lib/pusher";
 
 // Correction du type : content peut être null
 type NotificationWithSender = {
@@ -200,6 +199,28 @@ export async function POST(req: Request) {
       senderId: sender.id,
       isRead: false,
     },
+  });
+
+  // Récupérer le nouveau total pour l'envoyer au client
+  const unreadCount = await prisma.notification.count({
+    where: { receiverId, isRead: false },
+  });
+
+  await pusher.trigger(`private-user-${receiverId}`, "new-notification", {
+    // Données de la notif pour l'afficher dans le panel
+    id:         notification.id,
+    type:       notification.type,
+    createdAt:  notification.createdAt,
+    postId:     notification.postId,
+    receiverId: notification.receiverId,
+    senderId:   notification.senderId,
+    isRead:     notification.isRead,
+    sender: {
+      username: sender.username,
+      avatar:   sender.avatar,
+    },
+    // Compteur pour la Sidebar
+    count: unreadCount,
   });
 
   return NextResponse.json(notification);

@@ -1,8 +1,7 @@
 import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/conversations/route.ts
 import { prisma } from "@/lib/prisma";
-
-
+import { pusher } from "@/lib/pusher";
 import { NextResponse } from "next/server";
 
 // GET /api/conversations — liste toutes les conversations de l'utilisateur
@@ -130,7 +129,7 @@ export async function POST(req: Request) {
 
   const sender = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { id: true },
+    select: { id: true, username: true, avatar: true },
   });
   if (!sender) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   if (sender.id === recipientId) {
@@ -217,6 +216,21 @@ export async function POST(req: Request) {
 
     return { conversationId: conversation.id, isNew: true, message };
   });
+
+  // Pusher — notifier le destinataire si un premier message a été envoyé
+  if (result.message && result.isNew) {
+    await pusher.trigger(`private-user-${recipientId}`, "new-message", {
+      message: result.message,
+      conversationId: result.conversationId,
+      sender: {
+        id:       sender.id,
+        username: sender.username,
+        avatar:   sender.avatar,
+      },
+      // Nouvelle conversation → 1 message non lu
+      unreadCount: 1,
+    });
+  }
 
   return NextResponse.json(result, { status: 201 });
 }

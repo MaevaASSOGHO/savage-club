@@ -1,8 +1,7 @@
 import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/conversations/[id]/messages/route.ts
 import { prisma } from "@/lib/prisma";
-
-
+import { pusher } from "@/lib/pusher";
 import { NextResponse } from "next/server";
 import { encryptMessage, decryptMessage } from "@/lib/encryption";
 
@@ -104,7 +103,7 @@ export async function POST(
 
   const sender = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { id: true },
+    select: { id: true, username: true, avatar: true },
   });
   if (!sender) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
 
@@ -127,7 +126,7 @@ export async function POST(
   const encrypted = encryptMessage(content || "", mediaUrl);
   const parsedPrice = price ? parseInt(String(price)) : null;
 
-  const result = await prisma.$transaction(async (tx) => {
+  const { result, others } = await prisma.$transaction(async (tx) => {
     const message = await tx.message.create({
       data: {
         id:             crypto.randomUUID(),
@@ -138,7 +137,7 @@ export async function POST(
         price:          parsedPrice ?? null,
         isUnlocked:     !parsedPrice,
         conversationId,
-        senderId:       sender.id,  // ← scalaire direct
+        senderId:       sender.id,
       },
       select: {
         id: true, content: true, mediaUrl: true, mediaType: true,
@@ -158,19 +157,45 @@ export async function POST(
       data: { unreadCount: { increment: 1 } },
     });
 
-    const others = await tx.conversationParticipant.findMany({
+    const participants = await tx.conversationParticipant.findMany({
       where: { conversationId, userId: { not: sender.id } },
-      select: { userId: true },
+      select: { userId: true, unreadCount: true },
     });
-    for (const other of others) {
+
+    for (const other of participants) {
       await tx.notification.create({
-        data: { id: crypto.randomUUID(), type: "MESSAGE", receiverId: other.userId, senderId: sender.id },
+        data: {
+          id:         crypto.randomUUID(),
+          type:       "MESSAGE",
+          receiverId: other.userId,
+          senderId:   sender.id,
+        },
       });
     }
 
-    return message;
+    return { result: message, others: participants };
   });
 
+  // Pusher — notifier chaque destinataire en temps réel
   const dec = decryptMessage({ content: result.content, mediaUrl: result.mediaUrl, iv: result.iv });
-  return NextResponse.json({ ...result, ...dec, locked: false }, { status: 201 });
+  const messagePayload = { ...result, ...dec, locked: false };
+
+  await Promise.all(
+    others.map((other) =>
+      pusher.trigger(`private-user-${other.userId}`, "new-message", {
+        // Nouveau message complet pour l'afficher dans la conversation
+        message: messagePayload,
+        conversationId,
+        sender: {
+          id:       sender.id,
+          username: sender.username,
+          avatar:   sender.avatar,
+        },
+        // Compteur mis à jour pour le badge Sidebar
+        unreadCount: other.unreadCount + 1,
+      })
+    )
+  );
+
+  return NextResponse.json(messagePayload, { status: 201 });
 }

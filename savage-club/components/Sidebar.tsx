@@ -1,5 +1,4 @@
-// components/Sidebar.tsx - Version corrigée
-
+// components/Sidebar.tsx
 "use client";
 
 import Link from "next/link";
@@ -7,32 +6,28 @@ import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useState, useEffect } from "react";
-import { 
-  Home, 
+import {
   Book,
-  Search, 
-  Bell, 
-  MessageCircle, 
-  User,
+  Bell,
+  MessageCircle,
   Star,
   Sparkles,
   Film,
   Bookmark,
   Settings,
   LogOut,
-  Menu,
-  X
 } from "lucide-react";
 import NotificationsPanel from "@/components/NotificationsPanel";
+import { pusherClient } from "@/lib/pusher-client";
 
 const menuItems = [
-  { name: "Créateurs", icon: Star, href: "/creators" },
-  { name: "Formateurs", icon: Book, href: "/formateurs" },
-  { name: "Réels", icon: Film, href: "/reels" },
-  { name: "Mes favoris", icon: Bookmark, href: "/ma-liste" },
-  { name: "Découvrir", icon: Sparkles, href: "/decouvrir" },
-  { name: "Notifications", icon: Bell, action: "notif" as const },
-  { name: "Messages", icon: MessageCircle, href: "/messages", action: "message" as const },
+  { name: "Créateurs",     icon: Star,          href: "/creators" },
+  { name: "Formateurs",    icon: Book,           href: "/formateurs" },
+  { name: "Réels",         icon: Film,           href: "/reels" },
+  { name: "Mes favoris",   icon: Bookmark,       href: "/ma-liste" },
+  { name: "Découvrir",     icon: Sparkles,       href: "/decouvrir" },
+  { name: "Notifications", icon: Bell,           action: "notif" as const },
+  { name: "Messages",      icon: MessageCircle,  href: "/messages", action: "message" as const },
 ];
 
 export default function Sidebar() {
@@ -41,79 +36,58 @@ export default function Sidebar() {
   const router = useRouter();
 
   const [notifOpen, setNotifOpen] = useState(false);
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
   const [messageCount, setMessageCount] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
 
-  // TOUS les hooks doivent être appelés avant tout return conditionnel
-  // Vérifier si on est sur mobile
+  // Détecter mobile
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Récupérer le nombre de notifications non lues
+  // Fetch initial des compteurs + listener "notifications-read"
   useEffect(() => {
     if (!user) return;
 
-    const fetchUnreadCount = async () => {
-      try {
-        const res = await fetch("/api/notifications/unread-count");
-        if (res.ok) {
-          const data = await res.json();
-          setNotifCount(data.count);
-        }
-      } catch (error) {
-        console.error("Erreur chargement compteur notifications:", error);
-      }
-    };
+    Promise.all([
+      fetch("/api/notifications/unread-count").then(r => r.json()),
+      fetch("/api/conversations").then(r => r.json()),
+    ]).then(([notifs, convs]) => {
+      setNotifCount(notifs.count ?? 0);
+      const conversations = Array.isArray(convs)
+        ? convs
+        : convs?.conversations ?? convs?.data ?? [];
+      setMessageCount(
+        conversations.reduce((sum: number, c: any) => sum + (c.unreadCount || 0), 0)
+      );
+    }).catch(() => {});
 
-    fetchUnreadCount();
-
-    const handleNotificationsRead = () => {
-      setNotifCount(0);
-    };
+    const handleNotificationsRead = () => setNotifCount(0);
     window.addEventListener("notifications-read", handleNotificationsRead);
     return () => window.removeEventListener("notifications-read", handleNotificationsRead);
   }, [user]);
 
-  // Récupérer le nombre de messages non lus
+  // Pusher — mises à jour temps réel, zéro polling
   useEffect(() => {
     if (!user) return;
 
-    const fetchUnreadMessages = async () => {
-      try {
-        const res = await fetch("/api/conversations");
-        if (!res.ok) return;
-        
-        const data = await res.json();
-        const conversations = (() => {
-          if (Array.isArray(data)) return data;
-          if (data?.conversations && Array.isArray(data.conversations)) return data.conversations;
-          if (data?.data && Array.isArray(data.data)) return data.data;
-          return [];
-        })();
-        
-        const totalUnread = conversations.reduce(
-          (sum: number, conv: any) => sum + (conv.unreadCount || 0),
-          0
-        );
-        
-        setMessageCount(totalUnread);
-      } catch (error) {
-        console.error("Erreur chargement compteur messages:", error);
-      }
-    };
+    const channel = pusherClient.subscribe(`private-user-${user.id}`);
 
-    fetchUnreadMessages();
-    const interval = setInterval(fetchUnreadMessages, 30000);
-    return () => clearInterval(interval);
+    channel.bind("new-message", (data: { unreadCount: number }) => {
+      setMessageCount(data.unreadCount);
+    });
+
+    channel.bind("new-notification", (data: { count: number }) => {
+      setNotifCount(data.count);
+    });
+
+    return () => {
+      pusherClient.unsubscribe(`private-user-${user.id}`);
+    };
   }, [user]);
 
   const handleNavigation = (href?: string, action?: "notif" | "message") => {
@@ -121,22 +95,16 @@ export default function Sidebar() {
       setNotifOpen(true);
       return;
     }
-
     if (action === "message") {
       setMessageCount(0);
       if (href) router.push(href);
       return;
     }
-
-    if (href) {
-      router.push(href);
-    }
+    if (href) router.push(href);
   };
 
   // Retourner null APRÈS tous les hooks
-  if (!user || isMobile) {
-    return null;
-  }
+  if (!user || isMobile) return null;
 
   const userInitial = user.username?.[0]?.toUpperCase() || "?";
 
@@ -148,14 +116,14 @@ export default function Sidebar() {
         className={`
           fixed left-0 top-0 h-screen z-50
           transition-all duration-300 ease-in-out
-          bg-[#1a0533]/95
+          bg-[#1a0533]/95 backdrop-blur-xl
           border-r border-white/10
-          overflow-hidden
-          flex flex-col
+          overflow-hidden flex flex-col
           ${isHovered ? "w-[220px]" : "w-[80px]"}
         `}
       >
         <div className="flex flex-col justify-between h-full py-6">
+
           {/* Logo */}
           <div
             onClick={() => handleNavigation("/")}
@@ -164,7 +132,6 @@ export default function Sidebar() {
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg flex-shrink-0">
               <span className="text-white font-bold text-lg">S</span>
             </div>
-
             {isHovered && (
               <span className="text-white font-bold whitespace-nowrap transition-opacity duration-300">
                 Savage Club
@@ -260,15 +227,10 @@ export default function Sidebar() {
                   </div>
                 )}
               </div>
-
               {isHovered && (
                 <div className="transition-opacity duration-300">
-                  <p className="text-sm text-white font-medium">
-                    {user?.username}
-                  </p>
-                  <p className="text-xs text-white/50">
-                    @{user?.username}
-                  </p>
+                  <p className="text-sm text-white font-medium">{user?.username}</p>
+                  <p className="text-xs text-white/50">@{user?.username}</p>
                 </div>
               )}
             </button>
@@ -280,33 +242,24 @@ export default function Sidebar() {
                   className="flex items-center gap-4 px-4 py-2 text-xs text-white/30 hover:text-white/60 transition-colors"
                 >
                   <span className="text-[10px]">©</span>
-                  {isHovered && (
-                    <span className="whitespace-nowrap">
-                      Conditions générales
-                    </span>
-                  )}
+                  {isHovered && <span className="whitespace-nowrap">Conditions générales</span>}
                 </button>
-                
+
                 <button
                   onClick={() => router.push("/confidentialite")}
                   className="flex items-center gap-4 px-4 py-2 text-xs text-white/30 hover:text-white/60 transition-colors"
                 >
                   <span className="text-[10px]">🔒</span>
-                  {isHovered && (
-                    <span className="whitespace-nowrap">
-                      Confidentialité
-                    </span>
-                  )}
+                  {isHovered && <span className="whitespace-nowrap">Confidentialité</span>}
                 </button>
-                
+
                 <div className="px-4 py-2 text-[10px] text-white/20">
-                  {isHovered && (
-                    <span>© 2024 Savage Club</span>
-                  )}
+                  {isHovered && <span>© 2024 Savage Club</span>}
                 </div>
               </div>
             </div>
           </div>
+
         </div>
       </aside>
 
