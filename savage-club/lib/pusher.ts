@@ -1,6 +1,10 @@
-import Pusher from "pusher";
+// lib/pusher.ts
+import PusherServer from "pusher";
 
-export const pusher = new Pusher({
+// Contournement compatibilité CJS/ESM avec Turbopack
+const PusherClass = (PusherServer as any).default ?? PusherServer;
+
+export const pusher = new PusherClass({
   appId:   process.env.PUSHER_APP_ID!,
   key:     process.env.PUSHER_KEY!,
   secret:  process.env.PUSHER_SECRET!,
