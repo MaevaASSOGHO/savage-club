@@ -8,7 +8,8 @@ const withSerwist = withSerwistInit({
 });
 
 const nextConfig: NextConfig = {
-  turbopack: {}, // Next.js 16 : Turbopack activé par défaut — silence le conflit webpack/@serwist
+  turbopack: {},
+  serverExternalPackages: ["pusher"],
 };
 
 export default withSerwist(nextConfig);
