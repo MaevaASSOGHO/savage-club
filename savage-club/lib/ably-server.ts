@@ -5,7 +5,8 @@ let client: Ably.Rest | null = null;
 
 function getAblyServer() {
   if (!client) {
-    client = new Ably.Rest(process.env.ABLY_API_KEY!);
+    // Côté serveur : clé API directe, pas d'authUrl
+    client = new Ably.Rest({ key: process.env.ABLY_API_KEY! });
   }
   return client;
 }
