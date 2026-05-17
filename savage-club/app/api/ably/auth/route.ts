@@ -1,32 +1,19 @@
 // app/api/ably/auth/route.ts
 import { NextResponse } from "next/server";
-import { getServerSession } from "@/lib/auth-compat";
-import { authOptions } from "@/lib/auth-compat";
 import * as Ably from "ably";
-import { prisma } from "@/lib/prisma";
+import { getSessionUserId } from "@/lib/get-session-user";
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: { id: true },
-  });
-  if (!user) {
-    return NextResponse.json({ error: "Introuvable" }, { status: 404 });
-  }
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
 
   const client = new Ably.Rest(process.env.ABLY_API_KEY!);
   const tokenRequest = await client.auth.createTokenRequest({
-    clientId: user.id,
+    clientId: userId,
     capability: {
-      // L'utilisateur ne peut s'abonner qu'à son propre channel
-      [`private-user-${user.id}`]: ["subscribe"],
+      [`private-user-${userId}`]: ["subscribe"],
     },
-    ttl: 3600 * 1000, // token valide 1 heure (en ms)
+    ttl: 3600 * 1000,
   });
 
   return NextResponse.json(tokenRequest);

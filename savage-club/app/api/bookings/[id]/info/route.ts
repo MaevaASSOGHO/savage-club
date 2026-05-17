@@ -1,4 +1,5 @@
 import { getServerSession, authOptions } from "@/lib/auth-compat";
+import { getSessionUserId } from "@/lib/get-session-user";
 // app/api/bookings/[id]/info/route.ts
 import { prisma } from "@/lib/prisma";
 
@@ -15,11 +16,8 @@ export async function GET(
     return NextResponse.json({ error: "Non connecté" }, { status: 401 });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: { id: true },
-  });
-  if (!user) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "Non connecté" }, { status: 401 });
 
   const booking = await prisma.booking.findUnique({
     where: { id },
@@ -43,7 +41,7 @@ export async function GET(
   if (!booking) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
 
   // Seuls le créateur et l'abonné concernés peuvent accéder
-  if (booking.creatorId !== user.id && booking.requesterId !== user.id) {
+  if (booking.creatorId !== userId && booking.requesterId !== userId) {
     return NextResponse.json({ error: "Non autorisé" }, { status: 403 });
   }
 

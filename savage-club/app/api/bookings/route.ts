@@ -2,6 +2,7 @@ import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/bookings/route.ts
 import { prisma }       from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { getSessionUserId } from "@/lib/get-session-user";
 
 // ── GET ────────────────────────────────────────────────────────────────────
 export async function GET(req: Request) {
@@ -13,15 +14,12 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const as = searchParams.get("as") ?? "requester";
 
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: { id: true },
-  });
-  if (!user) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "Non connecté" }, { status: 401 });
 
   const where = as === "creator"
-    ? { creatorId: user.id }
-    : { requesterId: user.id };
+    ? { creatorId: userId }
+    : { requesterId: userId };
 
   const bookings = await prisma.booking.findMany({
     where,

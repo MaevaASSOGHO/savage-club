@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { sendBookingConfirmationEmail } from "@/lib/emails/resend";
 import { NextResponse } from "next/server";
 import crypto from "crypto";
+import { getSessionUserId } from "@/lib/get-session-user";
 
 const MAX_NEGOTIATIONS = 2;
 
@@ -39,11 +40,8 @@ export async function PATCH(
   const body = await req.json();
   const { action, proposedAt } = body;
 
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: { id: true },
-  });
-  if (!user) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "Non connecté" }, { status: 401 });
 
   const booking = await prisma.booking.findUnique({
     where: { id },
@@ -57,8 +55,8 @@ export async function PATCH(
 
   if (!booking) return NextResponse.json({ error: "Réservation introuvable" }, { status: 404 });
 
-  const isCreator   = booking.creatorId   === user.id;
-  const isRequester = booking.requesterId === user.id;
+  const isCreator   = booking.creatorId   === userId;
+  const isRequester = booking.requesterId === userId;
 
   if (!isCreator && !isRequester) {
     return NextResponse.json({ error: "Non autorisé" }, { status: 403 });
@@ -72,7 +70,7 @@ export async function PATCH(
       const updated = await tx.booking.update({
         where: { id }, data: { status: "CONFIRMED" },
       });
-      await createBookingNotif(tx, "BOOKING_CONFIRMED", booking.requesterId, user.id, id);
+      await createBookingNotif(tx, "BOOKING_CONFIRMED", booking.requesterId, userId, id);
       return updated;
     }
 
@@ -82,7 +80,7 @@ export async function PATCH(
         where: { id }, data: { status: "CANCELLED" },
       });
       const receiverId = isCreator ? booking.requesterId : booking.creatorId;
-      await createBookingNotif(tx, "BOOKING_CANCELLED", receiverId, user.id, id);
+      await createBookingNotif(tx, "BOOKING_CANCELLED", receiverId, userId, id);
       return updated;
     }
 
@@ -94,7 +92,7 @@ export async function PATCH(
         const updated = await tx.booking.update({
           where: { id }, data: { status: "CANCELLED" },
         });
-        await createBookingNotif(tx, "BOOKING_CANCELLED", booking.requesterId, user.id, id);
+        await createBookingNotif(tx, "BOOKING_CANCELLED", booking.requesterId, userId, id);
         return updated;
       }
 
@@ -104,10 +102,10 @@ export async function PATCH(
           status:            "COUNTER_PROPOSED",
           counterProposedAt: new Date(proposedAt),
           negotiationCount:  { increment: 1 },
-          counterProposedBy: user.id,
+          counterProposedBy: userId,
         },
       });
-      await createBookingNotif(tx, "BOOKING_RESCHEDULE", booking.requesterId, user.id, id);
+      await createBookingNotif(tx, "BOOKING_RESCHEDULE", booking.requesterId, userId, id);
       return updated;
     }
 
@@ -119,7 +117,7 @@ export async function PATCH(
         const updated = await tx.booking.update({
           where: { id }, data: { status: "CANCELLED" },
         });
-        await createBookingNotif(tx, "BOOKING_CANCELLED", booking.creatorId, user.id, id);
+        await createBookingNotif(tx, "BOOKING_CANCELLED", booking.creatorId, userId, id);
         return updated;
       }
 
@@ -129,10 +127,10 @@ export async function PATCH(
           status:            "COUNTER_REPLIED",
           counterRepliedAt:  new Date(proposedAt),
           negotiationCount:  { increment: 1 },
-          counterProposedBy: user.id,
+          counterProposedBy: userId,
         },
       });
-      await createBookingNotif(tx, "BOOKING_RESCHEDULE", booking.creatorId, user.id, id);
+      await createBookingNotif(tx, "BOOKING_RESCHEDULE", booking.creatorId, userId, id);
       return updated;
     }
 
@@ -147,7 +145,7 @@ export async function PATCH(
         data: { status: "CONFIRMED", scheduledAt: newSlot ?? booking.scheduledAt },
       });
       const receiverId = isCreator ? booking.requesterId : booking.creatorId;
-      await createBookingNotif(tx, "BOOKING_CONFIRMED", receiverId, user.id, id);
+      await createBookingNotif(tx, "BOOKING_CONFIRMED", receiverId, userId, id);
       return updated;
     }
 
