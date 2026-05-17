@@ -1,12 +1,6 @@
 // lib/pusher-client.ts
-import PusherJS from "pusher-js";
+import * as Ably from "ably";
 
-const PusherClient = (PusherJS as any).default ?? PusherJS;
-
-export const pusherClient = new PusherClient(
-  process.env.NEXT_PUBLIC_PUSHER_KEY!,
-  {
-    cluster:      process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
-    authEndpoint: "/api/pusher/auth",
-  }
-);
+export const ablyClient = new Ably.Realtime({
+  authUrl: "/api/ably/auth",
+});

@@ -18,7 +18,7 @@ import {
   LogOut,
 } from "lucide-react";
 import NotificationsPanel from "@/components/NotificationsPanel";
-import { pusherClient } from "@/lib/pusher-client";
+import { ablyClient } from "@/lib/pusher-client";
 
 const menuItems = [
   { name: "Créateurs",     icon: Star,          href: "/creators" },
@@ -71,22 +71,22 @@ export default function Sidebar() {
     return () => window.removeEventListener("notifications-read", handleNotificationsRead);
   }, [user]);
 
-  // Pusher — mises à jour temps réel, zéro polling
+  // Ably — mises à jour temps réel, zéro polling
   useEffect(() => {
     if (!user) return;
 
-    const channel = pusherClient.subscribe(`private-user-${user.id}`);
+    const channel = ablyClient.channels.get(`private-user-${user.id}`);
 
-    channel.bind("new-message", (data: { unreadCount: number }) => {
-      setMessageCount(data.unreadCount);
+    channel.subscribe("new-message", (msg) => {
+      setMessageCount(msg.data.unreadCount);
     });
 
-    channel.bind("new-notification", (data: { count: number }) => {
-      setNotifCount(data.count);
+    channel.subscribe("new-notification", (msg) => {
+      setNotifCount(msg.data.count);
     });
 
     return () => {
-      pusherClient.unsubscribe(`private-user-${user.id}`);
+      channel.unsubscribe();
     };
   }, [user]);
 
