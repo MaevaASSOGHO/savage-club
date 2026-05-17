@@ -1,4 +1,4 @@
-// lib/pusher.ts — renomme en lib/ably-server.ts si tu veux
+// lib/ably-server.ts 
 import * as Ably from "ably";
 
 let client: Ably.Rest | null = null;
