@@ -9,12 +9,10 @@ export async function GET() {
 
   const client = new Ably.Rest(process.env.ABLY_API_KEY!);
   const tokenRequest = await client.auth.createTokenRequest({
-    clientId: userId,
-    capability: {
-      [`private-user-${userId}`]: ["subscribe"],
-    },
-    ttl: 3600 * 1000,
-  });
+  clientId: userId,
+  // Pas de capability restrictive pour tester
+  ttl: 3600 * 1000,
+});
 
   return NextResponse.json(tokenRequest);
 }
