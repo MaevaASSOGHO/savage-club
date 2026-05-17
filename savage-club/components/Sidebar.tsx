@@ -18,7 +18,8 @@ import {
   LogOut,
 } from "lucide-react";
 import NotificationsPanel from "@/components/NotificationsPanel";
-import { ablyClient } from "@/lib/pusher-client";
+import { getAblyClient } from "@/lib/pusher-client";
+
 
 const menuItems = [
   { name: "Créateurs",     icon: Star,          href: "/creators" },
@@ -75,7 +76,10 @@ export default function Sidebar() {
   useEffect(() => {
     if (!user) return;
 
-    const channel = ablyClient.channels.get(`private-user-${user.id}`);
+    const ably = getAblyClient();
+    if (!ably) return; // SSR
+
+    const channel = ably.channels.get(`private-user-${user.id}`);
 
     channel.subscribe("new-message", (msg) => {
       setMessageCount(msg.data.unreadCount);
