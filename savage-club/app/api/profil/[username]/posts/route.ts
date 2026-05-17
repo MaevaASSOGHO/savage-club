@@ -2,8 +2,12 @@
 import { getServerSession, authOptions } from "@/lib/auth-compat";
 import { prisma }                        from "@/lib/prisma";
 import { NextRequest, NextResponse }     from "next/server";
+import { getCached, setCached }          from "@/lib/cache";
 
 const LIMIT = 12;
+
+type ProfileUser = { id: string; email: string };
+type SubStatus   = { isSubscriber: boolean; purchasedPostIds: string[] };
 
 export async function GET(
   req: NextRequest,
@@ -11,20 +15,29 @@ export async function GET(
 ) {
   const { username } = await params;
   const { searchParams } = new URL(req.url);
-  const tab    = searchParams.get("tab") ?? "posts";
+  const tab    = searchParams.get("tab")    ?? "posts";
   const cursor = searchParams.get("cursor") ?? undefined;
 
   const session = await getServerSession(authOptions);
 
-  const profileUser = await prisma.user.findUnique({
-    where:  { username },
-    select: { id: true, email: true },
-  });
-  if (!profileUser) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
+  // ── Cache du profil utilisateur ──────────────────────────────────────────
+  const profileCacheKey = `user:profil:${username}`;
+  let profileUser = await getCached<ProfileUser>(profileCacheKey);
+
+  if (!profileUser) {
+    const found = await prisma.user.findUnique({
+      where:  { username },
+      select: { id: true, email: true },
+    });
+    if (!found) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
+    profileUser = found;
+    await setCached(profileCacheKey, profileUser, "user");
+  }
 
   const isOwner = session?.user?.email === profileUser.email;
 
-  let isSubscriber    = false;
+  // ── Cache de l'abonnement viewer → créateur ──────────────────────────────
+  let isSubscriber     = false;
   let purchasedPostIds: string[] = [];
 
   if (session?.user?.email && !isOwner) {
@@ -32,33 +45,44 @@ export async function GET(
       where:  { email: session.user.email },
       select: { id: true },
     });
-    if (viewer) {
-      // Abonnement actif
-      const sub = await prisma.subscription.findFirst({
-        where:  { subscriberId: viewer.id, creatorId: profileUser.id, status: "ACTIVE" },
-        select: { tier: true },
-      });
-      isSubscriber = !!sub && (sub.tier === "SAVAGE" || sub.tier === "VIP");
 
-      // Posts déjà achetés
-      const purchases = await prisma.postPurchase.findMany({
-        where:  { userId: viewer.id },
-        select: { postId: true },
-      });
-      purchasedPostIds = purchases.map((p) => p.postId);
+    if (viewer) {
+      const subCacheKey = `sub:${viewer.id}:${profileUser.id}`;
+      let subStatus = await getCached<SubStatus>(subCacheKey);
+
+      if (!subStatus) {
+        const [sub, purchases] = await Promise.all([
+          prisma.subscription.findFirst({
+            where:  { subscriberId: viewer.id, creatorId: profileUser.id, status: "ACTIVE" },
+            select: { tier: true },
+          }),
+          prisma.postPurchase.findMany({
+            where:  { userId: viewer.id },
+            select: { postId: true },
+          }),
+        ]);
+
+        subStatus = {
+          isSubscriber:    !!sub && (sub.tier === "SAVAGE" || sub.tier === "VIP"),
+          purchasedPostIds: purchases.map((p) => p.postId),
+        };
+
+        await setCached(subCacheKey, subStatus, "subscription");
+      }
+
+      isSubscriber     = subStatus.isSubscriber;
+      purchasedPostIds = subStatus.purchasedPostIds;
     }
   }
 
-  let where: any = {
+  // ── Requête posts ────────────────────────────────────────────────────────
+  const where: Record<string, unknown> = {
     userId: profileUser.id,
     status: "PUBLISHED",
   };
 
-  if (tab === "reels") {
-    where.PostMedia = { some: { type: "VIDEO" } };
-  } else if (tab === "shop") {
-    where.price = { gt: 0 };
-  }
+  if (tab === "reels") where.PostMedia = { some: { type: "VIDEO" } };
+  if (tab === "shop")  where.price     = { gt: 0 };
 
   const posts = await prisma.post.findMany({
     where,
@@ -76,14 +100,6 @@ export async function GET(
   const items      = hasMore ? posts.slice(0, LIMIT) : posts;
   const nextCursor = hasMore ? items[items.length - 1].id : null;
 
-  console.log("[profil posts] purchases:", purchasedPostIds);
-  console.log("[profil posts] items:", items.map(p => ({ 
-    id: p.id, 
-    price: p.price, 
-    visibility: p.visibility,
-    isPurchased: purchasedPostIds.includes(p.id)
-  })));
-  
   return NextResponse.json({
     posts: items.map((p) => {
       const isPurchased = purchasedPostIds.includes(p.id);
@@ -93,10 +109,8 @@ export async function GET(
         id:         p.id,
         content:    p.content ?? "",
         visibility: p.visibility,
-        // Si déjà acheté → price = null pour ne plus afficher l'overlay payant
         price:      isPurchased ? null : p.price,
         previewUrl: p.previewUrl,
-        // Toujours exposer les URLs — le CSS gère le flou
         medias:     p.PostMedia,
         likes:      p.Like,
         comments:   p.Comment,

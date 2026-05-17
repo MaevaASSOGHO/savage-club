@@ -7,6 +7,7 @@ import ProfileStats from "@/components/profile/ProfileStats";
 import ProfileActions, { SubscriptionTier } from "@/components/profile/ProfileActions";
 import ProfileTabs from "@/components/profile/ProfileTabs";
 
+export const revalidate = 60;
 export default async function ProfilePage({
   params,
 }: {
