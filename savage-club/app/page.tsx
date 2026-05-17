@@ -1,28 +1,28 @@
 // app/page.tsx
 import { getServerSession, authOptions } from "@/lib/auth-compat";
 import { prisma } from "@/lib/prisma";
-import PostCard from "@/components/PostCard";
 import FeedLayout from "@/components/FeedLayout";
+import FeedInfiniteScroll from "@/components/FeedInfiniteScroll";
 
 export const dynamic = "force-dynamic";
+
+const LIMIT = 20;
 
 export default async function HomePage() {
   const session = await getServerSession(authOptions);
 
-  // Récupérer l'utilisateur connecté une seule fois
   let currentUser: { id: string } | null = null;
   if (session?.user?.email) {
     currentUser = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where:  { email: session.user.email },
       select: { id: true },
     });
   }
 
-  // IDs des créateurs auxquels l'utilisateur est abonné (pour filtrer les posts)
   let subscribedCreatorIds: string[] = [];
   if (currentUser) {
     const subs = await prisma.subscription.findMany({
-      where: { subscriberId: currentUser.id, status: "ACTIVE" },
+      where:  { subscriberId: currentUser.id, status: "ACTIVE" },
       select: { creatorId: true },
     });
     subscribedCreatorIds = subs.map((s) => s.creatorId);
@@ -39,66 +39,61 @@ export default async function HomePage() {
     include: {
       User: {
         select: {
-          id: true,
-          username: true,
-          displayName: true,
-          avatar: true,
-          isVerified: true,
-          subscriptionPrice: true,
-          subscriptionVIP: true,
+          id: true, username: true, displayName: true,
+          avatar: true, isVerified: true,
+          subscriptionPrice: true, subscriptionVIP: true,
         },
       },
       PostMedia: { orderBy: { order: "asc" } },
-      Like: true,
+      Like:      true,
       Comment: {
-        where: { parentId: null },
+        where:   { parentId: null },
         include: { User: { select: { id: true, username: true, avatar: true } } },
         orderBy: { createdAt: "asc" },
-        take: 2,
+        take:    2,
       },
       _count: { select: { Comment: true } },
     },
     orderBy: { createdAt: "desc" },
+    take:    LIMIT + 1,
   });
 
-  const postIds = posts.map((p) => p.id);
-  const creatorIds = [...new Set(posts.map((p) => p.User.id))];
+  const hasMore    = posts.length > LIMIT;
+  const items      = hasMore ? posts.slice(0, LIMIT) : posts;
+  const nextCursor = hasMore ? items[items.length - 1].id : null;
 
-  // Toutes les données personnalisées en une seule passe parallèle
+  const postIds    = items.map((p) => p.id);
+  const creatorIds = [...new Set(items.map((p) => p.User.id))];
+
   const [collections, reactions, savedPosts, subscriptions] = currentUser
     ? await Promise.all([
         prisma.collection.findMany({
-          where: { userId: currentUser.id },
+          where:  { userId: currentUser.id },
           select: { id: true, name: true },
           orderBy: { createdAt: "desc" },
         }),
         prisma.reaction.findMany({
-          where: { userId: currentUser.id, postId: { in: postIds } },
+          where:  { userId: currentUser.id, postId: { in: postIds } },
           select: { postId: true, type: true },
         }),
         prisma.savedPost.findMany({
-          where: { userId: currentUser.id, postId: { in: postIds } },
+          where:  { userId: currentUser.id, postId: { in: postIds } },
           select: { postId: true, collectionId: true },
         }),
         prisma.subscription.findMany({
-          where: {
-            subscriberId: currentUser.id,
-            creatorId: { in: creatorIds },
-            status: "ACTIVE",
-          },
+          where:  { subscriberId: currentUser.id, creatorId: { in: creatorIds }, status: "ACTIVE" },
           select: { creatorId: true, tier: true },
         }),
       ])
     : [[], [], [], []];
 
-  // Index pour accès O(1) par postId / creatorId
   const reactionsByPost = new Map<string, { liked: boolean; sparked: boolean; idea: boolean }>();
   for (const r of reactions as { postId: string; type: string }[]) {
-    const current = reactionsByPost.get(r.postId) ?? { liked: false, sparked: false, idea: false };
-    if (r.type === "LIKE")    current.liked   = true;
-    if (r.type === "SPARKLE") current.sparked = true;
-    if (r.type === "IDEA")    current.idea    = true;
-    reactionsByPost.set(r.postId, current);
+    const cur = reactionsByPost.get(r.postId) ?? { liked: false, sparked: false, idea: false };
+    if (r.type === "LIKE")    cur.liked   = true;
+    if (r.type === "SPARKLE") cur.sparked = true;
+    if (r.type === "IDEA")    cur.idea    = true;
+    reactionsByPost.set(r.postId, cur);
   }
 
   const savedByPost = new Map<string, string | null>();
@@ -111,51 +106,44 @@ export default async function HomePage() {
     tierByCreator.set(s.creatorId, s.tier);
   }
 
+  const initialItems = items.map((post) => {
+    const r       = reactionsByPost.get(post.id);
+    const isSaved = savedByPost.has(post.id);
+    const tier    = tierByCreator.get(post.User.id);
+
+    return {
+      post: {
+        id:         post.id,
+        content:    post.content ?? "",
+        createdAt:  post.createdAt.toISOString(),
+        price:      post.price,
+        previewUrl: post.previewUrl,
+        medias:     post.PostMedia,
+        likes:      post.Like,
+        comments:   post.Comment,
+        user:       post.User,
+      },
+      initialData: {
+        saved:            isSaved,
+        collectionId:     isSaved ? savedByPost.get(post.id) : null,
+        fired:            r?.liked   ?? false,
+        sparked:          r?.sparked ?? false,
+        idea:             r?.idea    ?? false,
+        likeCount:        post.Like.length,
+        subscriptionTier: (tier ?? "NONE") as "NONE" | "FREE" | "SAVAGE" | "VIP",
+      },
+    };
+  });
+
   return (
     <FeedLayout variant="solid">
-      <div className="flex flex-col items-center w-full max-w-2xl mx-auto px-4">
-        {posts.map((post) => {
-          const r = reactionsByPost.get(post.id);
-          const isSaved = savedByPost.has(post.id);
-          const tier = tierByCreator.get(post.User.id);
-
-          return (
-            <div key={post.id} className="w-full mb-4">
-              <PostCard
-                post={{
-                  id: post.id,
-                  content: post.content ?? "",
-                  createdAt: post.createdAt.toISOString(),
-                  price: post.price,
-                  previewUrl: post.previewUrl,
-                  medias: post.PostMedia,
-                  likes: post.Like,
-                  comments: post.Comment,
-                  user: {
-                    id: post.User.id,
-                    username: post.User.username,
-                    displayName: post.User.displayName,
-                    avatar: post.User.avatar,
-                    isVerified: post.User.isVerified,
-                    subscriptionPrice: post.User.subscriptionPrice,
-                    subscriptionVIP: post.User.subscriptionVIP,
-                  },
-                }}
-                initialData={{
-                  collections:       collections as { id: string; name: string }[],
-                  saved:             isSaved,
-                  collectionId:      isSaved ? savedByPost.get(post.id) : null,
-                  fired:             r?.liked   ?? false,
-                  sparked:           r?.sparked ?? false,
-                  idea:              r?.idea    ?? false,
-                  likeCount:         post.Like.length,
-                  subscriptionTier:  (tier ?? "NONE") as "NONE" | "FREE" | "SAVAGE" | "VIP",
-                }}
-              />
-            </div>
-          );
-        })}
-      </div>
+      <FeedInfiniteScroll
+        initialItems={initialItems}
+        initialCursor={nextCursor}
+        initialHasMore={hasMore}
+        feedType="home"
+        collections={collections as { id: string; name: string }[]}
+      />
     </FeedLayout>
   );
 }

@@ -17,50 +17,44 @@ export default function FeedLayout({
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Si hideBackground est true, pas de fond
   const bg = hideBackground
     ? ""
     : variant === "dark"
     ? "bg-gradient-to-br from-[#0f0126] to-[#1a0533]"
     : variant === "solid"
-    ? "bg-[#1a0533]" 
+    ? "bg-[#1a0533]"
     : "bg-gradient-to-br from-[#2a044a] to-[#3B0764]";
 
   return (
-    <div className={`flex min-h-screen ${bg}`}>
-      {/* Spacer fixe qui réserve l'espace de la sidebar dans le flux */}
-      {/* <div className="w-[80px] flex-shrink-0 hidden md:block" /> */}
-
-      <main className="md:pl-[80px] flex justify-center">
-        <div className="w-full max-w-xl flex flex-col gap-6 animate-fade-in">
+    <div className={`min-h-screen ${bg}`}>
+      {/*
+        PAS de padding/margin ici — layout.tsx gère déjà l'offset
+        de la sidebar via md:ml-[80px] sur le wrapper global.
+        FeedLayout centre juste son contenu dans l'espace disponible.
+      */}
+      <main className="flex justify-center px-4 py-6">
+        <div className="w-full max-w-xl flex flex-col gap-6">
           {children}
         </div>
       </main>
 
-      {/* Bouton Créer - visible uniquement sur desktop et pas sur la page réels */}
       {!hideBackground && !isMobile && (
         <Link
           href="/create"
           className="
             fixed bottom-6 right-6 z-50
             flex items-center gap-2
-            px-8 py-5
-            rounded-xs
-            bg-[#1a0533]/95
-            text-white font-bold text-sm
-            shadow-lg shadow-purple-900/40
-            backdrop-blur-md
+            px-8 py-5 rounded-xs
+            bg-[#1a0533]/95 text-white font-bold text-sm
+            shadow-lg shadow-purple-900/40 backdrop-blur-md
             hover:scale-105 hover:shadow-xl hover:shadow-purple-900/60
-            active:scale-95
-            transition-all duration-200 ease-out
+            active:scale-95 transition-all duration-200 ease-out
           "
         >
           <Plus size={18} />

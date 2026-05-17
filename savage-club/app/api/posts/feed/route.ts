@@ -1,15 +1,18 @@
-// app/formateurs/page.tsx
+// app/api/posts/feed/route.ts
 import { getServerSession, authOptions } from "@/lib/auth-compat";
 import { prisma } from "@/lib/prisma";
-import FeedLayout from "@/components/FeedLayout";
-import FeedInfiniteScroll from "@/components/FeedInfiniteScroll";
+import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
 const LIMIT = 20;
 
-export default async function FormateursPage() {
+export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
+  const { searchParams } = new URL(req.url);
+
+  const cursor = searchParams.get("cursor");
+  const type   = searchParams.get("type") ?? "home"; // home | creators | formateurs
 
   let currentUser: { id: string } | null = null;
   if (session?.user?.email) {
@@ -28,10 +31,16 @@ export default async function FormateursPage() {
     subscribedCreatorIds = subs.map((s) => s.creatorId);
   }
 
+  // Filtre selon le type de feed
+  const roleFilter =
+    type === "creators"   ? { role: "CREATOR"  as const } :
+    type === "formateurs" ? { role: "TRAINER"  as const } :
+    undefined;
+
   const posts = await prisma.post.findMany({
     where: {
       status: "PUBLISHED",
-      User:   { role: "TRAINER" },
+      ...(roleFilter ? { User: roleFilter } : {}),
       OR: [
         { visibility: "PUBLIC" },
         { visibility: "SUBSCRIBERS", userId: { in: subscribedCreatorIds } },
@@ -57,6 +66,7 @@ export default async function FormateursPage() {
     },
     orderBy: { createdAt: "desc" },
     take:    LIMIT + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
 
   const hasMore    = posts.length > LIMIT;
@@ -66,13 +76,9 @@ export default async function FormateursPage() {
   const postIds    = items.map((p) => p.id);
   const creatorIds = [...new Set(items.map((p) => p.User.id))];
 
-  const [collections, reactions, savedPosts, subscriptions] = currentUser
+  // Données personnalisées en parallèle
+  const [reactions, savedPosts, subscriptions] = currentUser
     ? await Promise.all([
-        prisma.collection.findMany({
-          where:  { userId: currentUser.id },
-          select: { id: true, name: true },
-          orderBy: { createdAt: "desc" },
-        }),
         prisma.reaction.findMany({
           where:  { userId: currentUser.id, postId: { in: postIds } },
           select: { postId: true, type: true },
@@ -86,7 +92,7 @@ export default async function FormateursPage() {
           select: { creatorId: true, tier: true },
         }),
       ])
-    : [[], [], [], []];
+    : [[], [], []];
 
   const reactionsByPost = new Map<string, { liked: boolean; sparked: boolean; idea: boolean }>();
   for (const r of reactions as { postId: string; type: string }[]) {
@@ -107,22 +113,22 @@ export default async function FormateursPage() {
     tierByCreator.set(s.creatorId, s.tier);
   }
 
-  const initialItems = items.map((post) => {
+  const result = items.map((post) => {
     const r       = reactionsByPost.get(post.id);
     const isSaved = savedByPost.has(post.id);
     const tier    = tierByCreator.get(post.User.id);
 
     return {
       post: {
-        id:         post.id,
-        content:    post.content ?? "",
-        createdAt:  post.createdAt.toISOString(),
-        price:      post.price,
+        id:        post.id,
+        content:   post.content ?? "",
+        createdAt: post.createdAt.toISOString(),
+        price:     post.price,
         previewUrl: post.previewUrl,
-        medias:     post.PostMedia,
-        likes:      post.Like,
-        comments:   post.Comment,
-        user:       post.User,
+        medias:    post.PostMedia,
+        likes:     post.Like,
+        comments:  post.Comment,
+        user:      post.User,
       },
       initialData: {
         saved:            isSaved,
@@ -136,19 +142,5 @@ export default async function FormateursPage() {
     };
   });
 
-  return (
-    <FeedLayout variant="solid">
-      {initialItems.length === 0 ? (
-        <p className="text-white/40 text-center text-sm">Aucun contenu pour le moment.</p>
-      ) : (
-        <FeedInfiniteScroll
-          initialItems={initialItems}
-          initialCursor={nextCursor}
-          initialHasMore={hasMore}
-          feedType="formateurs"
-          collections={collections as { id: string; name: string }[]}
-        />
-      )}
-    </FeedLayout>
-  );
+  return NextResponse.json({ items: result, nextCursor, hasMore });
 }
