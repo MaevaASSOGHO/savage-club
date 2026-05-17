@@ -1,7 +1,7 @@
 import { getServerSession, authOptions } from "@/lib/auth-compat";
 // app/api/conversations/[id]/messages/route.ts
 import { prisma } from "@/lib/prisma";
-import { getPusher } from "@/lib/pusher";
+import { triggerPusher } from "@/lib/ably-server";
 import { NextResponse } from "next/server";
 import { encryptMessage, decryptMessage } from "@/lib/encryption";
 
@@ -180,10 +180,9 @@ export async function POST(
   const dec = decryptMessage({ content: result.content, mediaUrl: result.mediaUrl, iv: result.iv });
   const messagePayload = { ...result, ...dec, locked: false };
 
-  const pusherInstance = await getPusher();
   await Promise.all(
-    others.map((other) => pusherInstance.trigger(`private-user-${other.userId}`, "new-message", {
-        // Nouveau message complet pour l'afficher dans la conversation
+    others.map((other) =>
+      triggerPusher(`private-user-${other.userId}`, "new-message", {
         message: messagePayload,
         conversationId,
         sender: {
@@ -191,7 +190,6 @@ export async function POST(
           username: sender.username,
           avatar:   sender.avatar,
         },
-        // Compteur mis à jour pour le badge Sidebar
         unreadCount: other.unreadCount + 1,
       })
     )
