@@ -34,14 +34,10 @@ export default function StepFollowSuggestions({ onNext }: Props) {
     const next = new Set(followed);
     if (next.has(userId)) {
       next.delete(userId);
+      fetch(`/api/follow/${userId}`, { method: "DELETE" }).catch(() => {});
     } else {
       next.add(userId);
-      // Follow immédiat en DB sans attendre
-      fetch("/api/follow", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ followingId: userId }),
-      }).catch(() => {});
+      fetch(`/api/follow/${userId}`, { method: "POST" }).catch(() => {});
     }
     setFollowed(next);
   }
