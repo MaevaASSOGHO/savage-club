@@ -10,7 +10,9 @@ export async function GET() {
   const client = new Ably.Rest(process.env.ABLY_API_KEY!);
   const tokenRequest = await client.auth.createTokenRequest({
   clientId: userId,
-  // Pas de capability restrictive pour tester
+  capability: {
+    [`private-user-${userId}`]: ["subscribe", "publish"],
+  },
   ttl: 3600 * 1000,
 });
 
