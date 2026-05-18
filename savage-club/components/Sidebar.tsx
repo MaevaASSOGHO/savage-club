@@ -74,10 +74,10 @@ export default function Sidebar() {
 
   // Ably — mises à jour temps réel, zéro polling
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
 
-    const ably = getAblyClient();
-    if (!ably) return; // SSR
+    const ably = getAblyClient(user.id);  // ← passe l'userId
+    if (!ably) return;
 
     const channel = ably.channels.get(`private-user-${user.id}`);
 
@@ -92,7 +92,7 @@ export default function Sidebar() {
     return () => {
       channel.unsubscribe();
     };
-  }, [user]);
+  }, [user?.id]);  // ← dépend de user.id pas de user
 
   const handleNavigation = (href?: string, action?: "notif" | "message") => {
     if (action === "notif") {
