@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useState, useRef } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -34,8 +34,6 @@ export default function RegisterPage() {
   const [step, setStep] = useState<1 | 2>(1)
   const [role, setRole] = useState<Role>("USER")
   const [name, setName] = useState("")
-  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
-  const usernameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirm, setConfirm] = useState("")
@@ -44,6 +42,9 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [acceptedCGU, setAcceptedCGU] = useState(false)
   const [error, setError] = useState("")
+
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle")
+  const usernameTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -63,6 +64,20 @@ export default function RegisterPage() {
     }
     if (password.length < 8) {
       setError("Le mot de passe doit contenir au moins 8 caractères.")
+      return
+    }
+
+    const usernameRegex = /^[a-zA-Z0-9_]{3,30}$/
+    if (!usernameRegex.test(name)) {
+      setError("Le nom d'utilisateur doit contenir 3–30 caractères (lettres, chiffres, underscore).")
+      return
+    }
+    if (usernameStatus === "taken") {
+      setError("Ce nom d'utilisateur est déjà pris.")
+      return
+    }
+    if (usernameStatus === "checking") {
+      setError("Veuillez patienter pendant la vérification.")
       return
     }
 
@@ -203,18 +218,53 @@ export default function RegisterPage() {
                 </button>
               </div>
 
+              {/* Nom d'utilisateur */}
               <div>
                 <label className="text-[#C4B5FD] text-xs font-medium mb-1.5 block">Nom d'utilisateur</label>
                 <input
                   type="text"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setName(val)
+                    setUsernameStatus("idle")
+
+                    if (usernameTimer.current) clearTimeout(usernameTimer.current)
+                    if (!val.trim()) return
+
+                    usernameTimer.current = setTimeout(async () => {
+                      setUsernameStatus("checking")
+                      const res = await fetch(`/api/check-username?username=${encodeURIComponent(val)}`)
+                      const data = await res.json()
+                      if (data.error) setUsernameStatus("invalid")
+                      else setUsernameStatus(data.available ? "available" : "taken")
+                    }, 500)
+                  }}
                   placeholder="savage_creator"
                   required
-                  className="w-full bg-[#1E0A3C] border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/30 outline-none focus:border-[#F59E0B]/60 focus:ring-1 focus:ring-[#F59E0B]/30 transition-all"
+                  className={`w-full bg-[#1E0A3C] border rounded-xl px-4 py-3 text-white text-sm placeholder-white/30 outline-none focus:ring-1 transition-all ${
+                    usernameStatus === "taken" || usernameStatus === "invalid"
+                      ? "border-red-500/60 focus:border-red-500/60 focus:ring-red-500/30"
+                      : usernameStatus === "available"
+                      ? "border-green-500/60 focus:border-green-500/60 focus:ring-green-500/30"
+                      : "border-white/10 focus:border-[#F59E0B]/60 focus:ring-[#F59E0B]/30"
+                  }`}
                 />
+                {usernameStatus === "checking" && (
+                  <p className="text-white/40 text-xs mt-1.5 animate-pulse">Vérification...</p>
+                )}
+                {usernameStatus === "available" && (
+                  <p className="text-green-400 text-xs mt-1.5">✓ Disponible</p>
+                )}
+                {usernameStatus === "taken" && (
+                  <p className="text-red-400 text-xs mt-1.5">✗ Ce nom d'utilisateur est déjà pris</p>
+                )}
+                {usernameStatus === "invalid" && (
+                  <p className="text-amber-400 text-xs mt-1.5">3–30 caractères, lettres/chiffres/underscore uniquement</p>
+                )}
               </div>
 
+              {/* Email */}
               <div>
                 <label className="text-[#C4B5FD] text-xs font-medium mb-1.5 block">Adresse email</label>
                 <input
@@ -225,13 +275,11 @@ export default function RegisterPage() {
                   required
                   className="w-full bg-[#1E0A3C] border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/30 outline-none focus:border-[#F59E0B]/60 focus:ring-1 focus:ring-[#F59E0B]/30 transition-all"
                 />
-                
               </div>
 
+              {/* Mot de passe */}
               <div>
-                <label className="text-[#C4B5FD] text-xs font-medium mb-1.5 block">
-                  Mot de passe
-                </label>
+                <label className="text-[#C4B5FD] text-xs font-medium mb-1.5 block">Mot de passe</label>
                 <div className="relative">
                   <input
                     type={showPassword ? "text" : "password"}
@@ -262,10 +310,9 @@ export default function RegisterPage() {
                 </div>
               </div>
 
+              {/* Confirmer mot de passe */}
               <div>
-                <label className="text-[#C4B5FD] text-xs font-medium mb-1.5 block">
-                  Confirmer le mot de passe
-                </label>
+                <label className="text-[#C4B5FD] text-xs font-medium mb-1.5 block">Confirmer le mot de passe</label>
                 <div className="relative">
                   <input
                     type={showConfirm ? "text" : "password"}
@@ -287,12 +334,10 @@ export default function RegisterPage() {
                         <line x1="1" y1="1" x2="23" y2="23"/>
                       </svg>
                     ) : (
-
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                         <circle cx="12" cy="12" r="3"/>
                       </svg>
-
                     )}
                   </button>
                 </div>
@@ -303,6 +348,7 @@ export default function RegisterPage() {
                   {error}
                 </div>
               )}
+
               <label className="flex items-start gap-2 text-xs text-white/60 mt-2">
                 <input
                   type="checkbox"
@@ -311,16 +357,17 @@ export default function RegisterPage() {
                   className="mt-1 accent-[#F59E0B]"
                 />
                 <span>
-                  J’accepte les{" "}
+                  J'accepte les{" "}
                   <Link href="/cgu" className="underline text-[#F59E0B] hover:text-[#FBBF24]">
-                    conditions d’utilisation
+                    conditions d'utilisation
                   </Link>{" "}
                   et je confirme avoir au moins 18 ans.
                 </span>
               </label>
+
               <button
                 type="submit"
-                disabled={loading || !acceptedCGU}
+                disabled={loading || !acceptedCGU || usernameStatus === "taken" || usernameStatus === "invalid" || usernameStatus === "checking"}
                 className="w-full bg-[#6B21A8] hover:bg-[#7C3AED] disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all duration-200 text-sm shadow-lg shadow-[#6B21A8]/30 mt-1"
               >
                 {loading ? (
