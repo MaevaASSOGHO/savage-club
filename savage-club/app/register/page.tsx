@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -34,6 +34,8 @@ export default function RegisterPage() {
   const [step, setStep] = useState<1 | 2>(1)
   const [role, setRole] = useState<Role>("USER")
   const [name, setName] = useState("")
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
+  const usernameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirm, setConfirm] = useState("")

@@ -1,387 +1,400 @@
-// components/profile/ProfileHeader.tsx
-"use client";
+"use client"
 
-import { useState, useRef } from "react";
-import { useRouter } from "next/navigation";
-import ReportButton from "../ReportButton";
+import { useState, useRef } from "react"
+import { signIn } from "next-auth/react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
 
-type User = {
-  id: string;
-  displayName: string | null;
-  username: string;
-  avatar: string | null;
-  bio: string | null;
-  role: string;
-  isVerified: boolean;
-  category: string | null;
-  location: string | null;
-  website: string | null;
-  createdAt: string;
-};
+type Role = "USER" | "CREATOR" | "TRAINER"
 
-type Props = {
-  user: User;
-  hasBadge: boolean;
-  isOwner: boolean;
-  followerCount: number;
-};
+const ROLES = [
+  {
+    value: "USER" as Role,
+    label: "Membre",
+    emoji: "👤",
+    description: "Je consomme du contenu et suis des créateurs",
+  },
+  {
+    value: "CREATOR" as Role,
+    label: "Créateur",
+    emoji: "🎬",
+    description: "Je crée du contenu lifestyle, photo, vidéo...",
+  },
+  {
+    value: "TRAINER" as Role,
+    label: "Formateur",
+    emoji: "🎓",
+    description: "Je partage des formations et du contenu éducatif",
+  },
+]
 
-const ROLE_LABEL: Record<string, string> = {
-  CREATOR: "Créateur",
-  TRAINER: "Formateur",
-  USER: "Membre",
-  ADMIN: "Admin",
-};
+export default function RegisterPage() {
+  const router = useRouter()
 
-function InlineField({
-  value,
-  onSave,
-  placeholder,
-  multiline = false,
-  className = "",
-}: {
-  value: string;
-  onSave: (v: string) => Promise<void>;
-  placeholder: string;
-  multiline?: boolean;
-  className?: string;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const [saving, setSaving] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1)
+  const [role, setRole] = useState<Role>("USER")
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [confirm, setConfirm] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [acceptedCGU, setAcceptedCGU] = useState(false)
+  const [error, setError] = useState("")
 
-  async function handleSave() {
-    if (draft === value) { setEditing(false); return; }
-    setSaving(true);
-    await onSave(draft);
-    setSaving(false);
-    setEditing(false);
-  }
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle")
+  const usernameTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  if (editing) {
-    return multiline ? (
-      <textarea
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={handleSave}
-        autoFocus
-        rows={3}
-        placeholder={placeholder}
-        className={`bg-white/10 border border-amber-400/50 rounded-xl px-3 py-2 text-white text-sm outline-none resize-none w-full ${className}`}
-      />
-    ) : (
-      <input
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={handleSave}
-        onKeyDown={(e) => e.key === "Enter" && handleSave()}
-        autoFocus
-        placeholder={placeholder}
-        className={`bg-white/10 border border-amber-400/50 rounded-xl px-3 py-1.5 text-white text-sm outline-none ${className}`}
-      />
-    );
-  }
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError("")
 
-  return (
-    <span
-      onClick={() => { setDraft(value); setEditing(true); }}
-      className={`cursor-text hover:opacity-80 transition-opacity group relative ${className}`}
-      title="Cliquer pour modifier"
-    >
-      {value || <span className="text-white/25 italic text-xs">{placeholder}</span>}
-      <span className="ml-1 opacity-0 group-hover:opacity-40 text-amber-400 text-xs transition-opacity">✎</span>
-      {saving && <span className="ml-1 text-white/30 text-xs animate-pulse">•••</span>}
-    </span>
-  );
-}
-
-export default function ProfileHeader({ user: initialUser, hasBadge, isOwner }: Props) {
-  const router = useRouter();
-  const [user, setUser] = useState(initialUser);
-  const [bioExpanded, setBioExpanded] = useState(false);
-  const [showOptions, setShowOptions] = useState(false);
-  const [avatarLoading, setAvatarLoading] = useState(false);
-  const [saveError, setSaveError] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  async function saveField(field: string, value: string) {
-    setSaveError("");
-    const res = await fetch("/api/me", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [field]: value }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setSaveError(data.error || "Erreur lors de la sauvegarde");
-      return;
+    if (!name.trim() || !email.trim() || !password) {
+      setError("Tous les champs sont requis.")
+      return
     }
-    setUser((prev) => ({ ...prev, ...data }));
-    if (field === "username") router.replace(`/profil/${data.username}`);
+    if (!acceptedCGU) {
+      setError("Vous devez accepter les conditions générales d'utilisation.")
+      return
+    }
+    if (password !== confirm) {
+      setError("Les mots de passe ne correspondent pas.")
+      return
+    }
+    if (password.length < 8) {
+      setError("Le mot de passe doit contenir au moins 8 caractères.")
+      return
+    }
+
+    const usernameRegex = /^[a-zA-Z0-9_]{3,30}$/
+    if (!usernameRegex.test(name)) {
+      setError("Le nom d'utilisateur doit contenir 3–30 caractères (lettres, chiffres, underscore).")
+      return
+    }
+    if (usernameStatus === "taken") {
+      setError("Ce nom d'utilisateur est déjà pris.")
+      return
+    }
+    if (usernameStatus === "checking") {
+      setError("Veuillez patienter pendant la vérification.")
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password, role, acceptedCGU }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Erreur d'inscription")
+
+      const result = await signIn("credentials", {
+        email,
+        password,
+        mode: "login",
+        redirect: false,
+      })
+
+      if (result?.error) throw new Error("Inscription réussie. Connectez-vous manuellement.")
+
+      router.push("/")
+      router.refresh()
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setAvatarLoading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
-    const uploadData = await uploadRes.json();
-    if (uploadRes.ok) await saveField("avatar", uploadData.url);
-    setAvatarLoading(false);
-  }
-
-  const bioText = user.bio ?? "";
-  const bioShort = bioText.length > 100 ? bioText.slice(0, 100) + "..." : bioText;
-
-  // Fermer le menu quand on clique ailleurs
-  const handleClickOutside = () => {
-    setShowOptions(false);
-  };
+  const selectedRole = ROLES.find(r => r.value === role)!
 
   return (
-    <div className="mb-6">
+    <div className="min-h-screen bg-[#1E0A3C] flex items-center justify-center px-4 py-12 relative overflow-hidden">
 
-      {saveError && (
-        <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs px-3 py-2 rounded-xl mb-3">
-          {saveError}
+      {/* Blobs décoratifs */}
+      <div className="absolute top-[-80px] left-[-80px] w-[340px] h-[340px] rounded-full bg-[#6B21A8]/30 blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-[-60px] right-[-60px] w-[280px] h-[280px] rounded-full bg-[#F59E0B]/10 blur-[90px] pointer-events-none" />
+
+      <div className="w-full max-w-[420px] relative z-10">
+
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-14 h-14 rounded-2xl border-2 border-[#F59E0B] flex items-center justify-center mb-3 bg-[#2A1356]">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+              <path d="M15 10l4.553-2.07A1 1 0 0121 8.845v6.31a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"
+                stroke="#F59E0B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <h1 className="text-[#F59E0B] text-2xl font-bold tracking-tight" style={{ fontFamily: "Georgia, serif" }}>
+            Savage Club
+          </h1>
+          <p className="text-[#A78BFA] text-sm mt-1">Rejoignez la communauté</p>
         </div>
-      )}
 
-      <div className="flex items-start gap-5">
+        {/* Card */}
+        <div className="bg-[#2A1356]/80 backdrop-blur-sm border border-white/10 rounded-2xl p-6 shadow-2xl">
 
-        {/* ── Avatar ── */}
-        <div className="relative flex-shrink-0">
-          <div
-            className={`w-20 h-20 rounded-full overflow-hidden ring-2 ring-amber-400/60 ${isOwner ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
-            onClick={() => isOwner && fileInputRef.current?.click()}
-            title={isOwner ? "Changer la photo" : undefined}
-          >
-            {avatarLoading ? (
-              <div className="w-full h-full bg-purple-800 flex items-center justify-center">
-                <svg className="animate-spin w-5 h-5 text-amber-400" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                </svg>
-              </div>
-            ) : user.avatar ? (
-              <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-purple-700 flex items-center justify-center text-white text-2xl font-bold">
-                {user.username[0].toUpperCase()}
-              </div>
-            )}
+          {/* Indicateur d'étape */}
+          <div className="flex items-center gap-2 mb-6">
+            <div className={`h-1 flex-1 rounded-full transition-all ${step >= 1 ? "bg-[#F59E0B]" : "bg-white/10"}`} />
+            <div className={`h-1 flex-1 rounded-full transition-all ${step >= 2 ? "bg-[#F59E0B]" : "bg-white/10"}`} />
           </div>
 
-          {/* Icône caméra si owner */}
-          {isOwner && (
-            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-amber-400 rounded-full flex items-center justify-center border-2 border-[#3B0764] pointer-events-none">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="black">
-                <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
-                <circle cx="12" cy="13" r="4" fill="none" stroke="black" strokeWidth="2"/>
-              </svg>
-            </div>
-          )}
+          {/* ── ÉTAPE 1 : Choix du rôle ── */}
+          {step === 1 && (
+            <div>
+              <p className="text-[#C4B5FD] text-sm font-medium mb-4">Quel est ton profil ?</p>
 
-          {/* Badge vérifié */}
-          {user.isVerified && !isOwner && (
-            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center border-2 border-[#3B0764]">
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-          )}
+              <div className="flex flex-col gap-3 mb-5">
+                {ROLES.map((r) => (
+                  <button
+                    key={r.value}
+                    onClick={() => setRole(r.value)}
+                    className={`flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all duration-200 ${
+                      role === r.value
+                        ? "border-[#F59E0B]/60 bg-[#F59E0B]/10"
+                        : "border-white/10 bg-[#1E0A3C] hover:border-white/20"
+                    }`}
+                  >
+                    <span className="text-xl">{r.emoji}</span>
+                    <div className="flex-1">
+                      <p className={`font-semibold text-sm ${role === r.value ? "text-[#F59E0B]" : "text-white"}`}>
+                        {r.label}
+                      </p>
+                      <p className="text-white/40 text-xs mt-0.5">{r.description}</p>
+                    </div>
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                      role === r.value ? "border-[#F59E0B] bg-[#F59E0B]" : "border-white/20"
+                    }`}>
+                      {role === r.value && (
+                        <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                          <path d="M2 5l2.5 2.5L8 3" stroke="black" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
 
-          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
-        </div>
-
-        {/* ── Infos ── */}
-        <div className="flex-1 min-w-0">
-
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Nom d'affichage — visible par tous, éditable si owner */}
-              {isOwner ? (
-                <InlineField
-                  value={user.displayName ?? user.username}
-                  onSave={(v) => saveField("displayName", v)}
-                  placeholder="Votre prénom"
-                  className="text-white font-black text-xl tracking-tight uppercase"
-                />
-              ) : (
-                <h1 className="text-white font-black text-xl tracking-tight uppercase">
-                  {user.displayName ?? user.username}
-                </h1>
-              )}
-
-              {user.isVerified && (
-                <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
-                  <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
-                    <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
+              {/* Avertissement créateur/formateur */}
+              {(role === "CREATOR" || role === "TRAINER") && (
+                <div className="bg-[#F59E0B]/10 border border-[#F59E0B]/20 rounded-xl px-4 py-3 mb-5">
+                  <p className="text-[#F59E0B]/80 text-xs leading-relaxed">
+                    ⚠️ En tant que <strong>{role === "CREATOR" ? "créateur" : "formateur"}</strong>, une validation par pièce d'identité sera requise pour publier du contenu payant. Vous pourrez le faire depuis votre profil.
+                  </p>
                 </div>
               )}
 
-              {hasBadge && (
-                <span className="bg-amber-400/20 border border-amber-400/40 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                  ✦ CERTIFIÉ
-                </span>
-              )}
+              <button
+                onClick={() => setStep(2)}
+                className="w-full bg-[#6B21A8] hover:bg-[#7C3AED] text-white font-bold py-3 rounded-xl transition-all duration-200 text-sm shadow-lg shadow-[#6B21A8]/30"
+              >
+                Continuer →
+              </button>
             </div>
+          )}
 
-            {/* Menu ⋮ pour les autres */}
-            {!isOwner && (
-              <div className="relative">
-                <button 
-                  onClick={() => setShowOptions((v) => !v)} 
-                  className="text-white/40 hover:text-white p-1 transition-colors"
+          {/* ── ÉTAPE 2 : Informations ── */}
+          {step === 2 && (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+
+              {/* Rôle choisi + bouton retour */}
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <span>{selectedRole.emoji}</span>
+                  <span className="text-[#F59E0B] text-sm font-semibold">{selectedRole.label}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setStep(1); setError("") }}
+                  className="text-[#A78BFA] text-xs hover:text-white transition-colors"
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <circle cx="12" cy="5" r="1.5"/>
-                    <circle cx="12" cy="12" r="1.5"/>
-                    <circle cx="12" cy="19" r="1.5"/>
-                  </svg>
+                  ← Changer
                 </button>
-                
-                {showOptions && (
-                  <>
-                    {/* Overlay pour fermer en cliquant ailleurs */}
-                    <div 
-                      className="fixed inset-0 z-10" 
-                      onClick={handleClickOutside}
-                    />
-                    
-                    <div className="absolute right-0 top-8 bg-[#2A1356] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-20 w-44">
-                      <button 
-                        onClick={() => {
-                          // Fonction de partage
-                          navigator.clipboard.writeText(window.location.href);
-                          setShowOptions(false);
-                        }}
-                        className="w-full text-left px-4 py-3 text-sm text-white/70 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2"
-                      >
-                        <span>🔗</span>
-                        Partager le profil
-                      </button>
-                      
-                      {/* Séparateur */}
-                      <div className="border-t border-white/10"></div>
-                      
-                      {/* Bouton de signalement avec ReportButton */}
-                      <div className="w-full">
-                        <ReportButton 
-                          type="user" 
-                          id={user.id} 
-                          variant="text"
-                          className="w-full text-left px-4 py-3 text-sm text-white/70 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2"
-                        />
-                      </div>
-                      
-                      {/* Bouton bloquer */}
-                      <button 
-                        onClick={() => {
-                          // Fonction pour bloquer l'utilisateur
-                          console.log("Bloquer", user.id);
-                          setShowOptions(false);
-                        }}
-                        className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
-                      >
-                        <span>🚫</span>
-                        Bloquer
-                      </button>
-                    </div>
-                  </>
+              </div>
+
+              {/* Nom d'utilisateur */}
+              <div>
+                <label className="text-[#C4B5FD] text-xs font-medium mb-1.5 block">Nom d'utilisateur</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setName(val)
+                    setUsernameStatus("idle")
+
+                    if (usernameTimer.current) clearTimeout(usernameTimer.current)
+                    if (!val.trim()) return
+
+                    usernameTimer.current = setTimeout(async () => {
+                      setUsernameStatus("checking")
+                      const res = await fetch(`/api/check-username?username=${encodeURIComponent(val)}`)
+                      const data = await res.json()
+                      if (data.error) setUsernameStatus("invalid")
+                      else setUsernameStatus(data.available ? "available" : "taken")
+                    }, 500)
+                  }}
+                  placeholder="savage_creator"
+                  required
+                  className={`w-full bg-[#1E0A3C] border rounded-xl px-4 py-3 text-white text-sm placeholder-white/30 outline-none focus:ring-1 transition-all ${
+                    usernameStatus === "taken" || usernameStatus === "invalid"
+                      ? "border-red-500/60 focus:border-red-500/60 focus:ring-red-500/30"
+                      : usernameStatus === "available"
+                      ? "border-green-500/60 focus:border-green-500/60 focus:ring-green-500/30"
+                      : "border-white/10 focus:border-[#F59E0B]/60 focus:ring-[#F59E0B]/30"
+                  }`}
+                />
+                {usernameStatus === "checking" && (
+                  <p className="text-white/40 text-xs mt-1.5 animate-pulse">Vérification...</p>
+                )}
+                {usernameStatus === "available" && (
+                  <p className="text-green-400 text-xs mt-1.5">✓ Disponible</p>
+                )}
+                {usernameStatus === "taken" && (
+                  <p className="text-red-400 text-xs mt-1.5">✗ Ce nom d'utilisateur est déjà pris</p>
+                )}
+                {usernameStatus === "invalid" && (
+                  <p className="text-amber-400 text-xs mt-1.5">3–30 caractères, lettres/chiffres/underscore uniquement</p>
                 )}
               </div>
-            )}
-          </div>
 
-          {/* @pseudo + catégorie */}
-          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-            {/* @pseudo — éditable si owner */}
-            <span className="text-[#A78BFA] text-xs flex items-center gap-0.5">
-              @{isOwner ? (
-                <InlineField
-                  value={user.username}
-                  onSave={(v) => saveField("username", v)}
-                  placeholder="pseudo"
-                  className="text-[#A78BFA] text-xs"
+              {/* Email */}
+              <div>
+                <label className="text-[#C4B5FD] text-xs font-medium mb-1.5 block">Adresse email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="vous@exemple.com"
+                  required
+                  className="w-full bg-[#1E0A3C] border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/30 outline-none focus:border-[#F59E0B]/60 focus:ring-1 focus:ring-[#F59E0B]/30 transition-all"
                 />
-              ) : (
-                <span>{user.username}</span>
-              )}
-            </span>
-            {isOwner ? (
-              <InlineField
-                value={user.category ?? ""}
-                onSave={(v) => saveField("category", v)}
-                placeholder="+ catégorie"
-                className="bg-amber-400/15 border border-amber-400/30 text-amber-400 text-xs px-2.5 py-0.5 rounded-full"
-              />
-            ) : (
-              <span className="bg-amber-400/15 border border-amber-400/30 text-amber-400 text-xs px-2.5 py-0.5 rounded-full">
-                {ROLE_LABEL[user.role]}{user.category ? ` ${user.category}` : ""}
-              </span>
-            )}
-          </div>
+              </div>
 
-          {/* Bio */}
-          <div className="mt-2">
-            {isOwner ? (
-              <InlineField
-                value={bioText}
-                onSave={(v) => saveField("bio", v)}
-                placeholder="Écrivez votre bio..."
-                multiline
-                className="text-white/70 text-sm leading-relaxed"
-              />
-            ) : (
-              <>
-                <p className="text-white/70 text-sm leading-relaxed whitespace-pre-line">
-                  {bioExpanded ? bioText : bioShort}
-                </p>
-                {bioText.length > 100 && (
-                  <button onClick={() => setBioExpanded((v) => !v)} className="text-amber-400/70 text-xs mt-0.5 hover:text-amber-400 transition-colors">
-                    {bioExpanded ? "moins" : "plus"}
+              {/* Mot de passe */}
+              <div>
+                <label className="text-[#C4B5FD] text-xs font-medium mb-1.5 block">Mot de passe</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="w-full bg-[#1E0A3C] border border-white/10 rounded-xl px-4 py-3 pr-11 text-white text-sm placeholder-white/30 outline-none focus:border-[#F59E0B]/60 focus:ring-1 focus:ring-[#F59E0B]/30 transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
+                  >
+                    {showPassword ? (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
+                        <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
+                        <line x1="1" y1="1" x2="23" y2="23"/>
+                      </svg>
+                    ) : (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                      </svg>
+                    )}
                   </button>
-                )}
-              </>
-            )}
-          </div>
+                </div>
+              </div>
 
-          {/* Localisation */}
-          {(isOwner || user.location) && (
-            <div className="flex items-center gap-1.5 mt-2">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/30 flex-shrink-0">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
-              </svg>
-              {isOwner ? (
-                <InlineField value={user.location ?? ""} onSave={(v) => saveField("location", v)} placeholder="Ajouter une ville" className="text-white/40 text-xs" />
-              ) : (
-                <span className="text-white/40 text-xs">{user.location}</span>
+              {/* Confirmer mot de passe */}
+              <div>
+                <label className="text-[#C4B5FD] text-xs font-medium mb-1.5 block">Confirmer le mot de passe</label>
+                <div className="relative">
+                  <input
+                    type={showConfirm ? "text" : "password"}
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="w-full bg-[#1E0A3C] border border-white/10 rounded-xl px-4 py-3 pr-11 text-white text-sm placeholder-white/30 outline-none focus:border-[#F59E0B]/60 focus:ring-1 focus:ring-[#F59E0B]/30 transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
+                  >
+                    {showConfirm ? (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
+                        <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
+                        <line x1="1" y1="1" x2="23" y2="23"/>
+                      </svg>
+                    ) : (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {error && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm">
+                  {error}
+                </div>
               )}
-            </div>
-          )}
 
-          {/* Website */}
-          {(isOwner || user.website) && (
-            <div className="flex items-center gap-1.5 mt-1">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/30 flex-shrink-0">
-                <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
-              </svg>
-              {isOwner ? (
-                <InlineField value={user.website ?? ""} onSave={(v) => saveField("website", v)} placeholder="Ajouter un lien" className="text-amber-400/70 text-xs" />
-              ) : (
-                <a href={user.website!} target="_blank" rel="noopener noreferrer" className="text-amber-400/70 text-xs hover:text-amber-400 transition-colors truncate">
-                  {user.website}
-                </a>
-              )}
-            </div>
-          )}
+              <label className="flex items-start gap-2 text-xs text-white/60 mt-2">
+                <input
+                  type="checkbox"
+                  checked={acceptedCGU}
+                  onChange={(e) => setAcceptedCGU(e.target.checked)}
+                  className="mt-1 accent-[#F59E0B]"
+                />
+                <span>
+                  J'accepte les{" "}
+                  <Link href="/cgu" className="underline text-[#F59E0B] hover:text-[#FBBF24]">
+                    conditions d'utilisation
+                  </Link>{" "}
+                  et je confirme avoir au moins 18 ans.
+                </span>
+              </label>
 
+              <button
+                type="submit"
+                disabled={loading || !acceptedCGU || usernameStatus === "taken" || usernameStatus === "invalid" || usernameStatus === "checking"}
+                className="w-full bg-[#6B21A8] hover:bg-[#7C3AED] disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all duration-200 text-sm shadow-lg shadow-[#6B21A8]/30 mt-1"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                    </svg>
+                    Création du compte...
+                  </span>
+                ) : "Créer mon compte"}
+              </button>
+            </form>
+          )}
         </div>
+
+        <p className="text-center text-white/30 text-xs mt-6">
+          Déjà un compte ?{" "}
+          <Link href="/auth" className="text-[#A78BFA] hover:text-[#F59E0B] transition-colors">
+            Se connecter
+          </Link>
+          {" · "}
+          <Link href="/cgu" className="text-[#A78BFA] hover:text-[#F59E0B] transition-colors">
+            CGU
+          </Link>
+        </p>
       </div>
     </div>
-  );
+  )
 }
