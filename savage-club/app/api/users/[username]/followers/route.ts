@@ -1,9 +1,6 @@
 import { getServerSession, authOptions } from "@/lib/auth-compat";
-// app/api/users/[username]/followers/route.ts
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-
-
 
 export async function GET(
   req: Request,
@@ -19,21 +16,25 @@ export async function GET(
 
   const profile = await prisma.user.findUnique({
     where: { username },
-    select: { id: true },
+    select: { id: true, email: true },
   });
 
   if (!profile) {
     return NextResponse.json({ error: "User introuvable" }, { status: 404 });
   }
 
-  let viewerId: string | null = null;
+  const viewer = session?.user?.email
+    ? await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true, role: true },
+      })
+    : null;
 
-  if (session?.user?.email) {
-    const viewer = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-    viewerId = viewer?.id || null;
+  const isOwner = session?.user?.email === profile.email;
+  const isAdmin = viewer?.role === "ADMIN";
+
+  if (!isOwner && !isAdmin) {
+    return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
   }
 
   const follows = await prisma.follow.findMany({
@@ -52,21 +53,19 @@ export async function GET(
 
   let viewerFollows: string[] = [];
 
-  if (viewerId) {
-  const vf = await prisma.follow.findMany({
-    where: { followerId: viewerId }, // moi
-    select: { followingId: true },   // qui je suis
+  if (viewer) {
+    const vf = await prisma.follow.findMany({
+      where: { followerId: viewer.id },
+      select: { followingId: true },
     });
-
     viewerFollows = vf.map((f) => f.followingId);
   }
 
   const users = follows.map((f) => ({
-        ...f.User_Follow_followerIdToUser,
-        isFollowing: viewerFollows.includes(f.User_Follow_followerIdToUser.id),
-    }));
+    ...f.User_Follow_followerIdToUser,
+    isFollowing: viewerFollows.includes(f.User_Follow_followerIdToUser.id),
+  }));
 
-  // déduplication propre
   const uniqueUsers = Array.from(
     new Map(users.map((u) => [u.id, u])).values()
   );

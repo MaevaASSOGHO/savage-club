@@ -34,18 +34,19 @@ export default async function ProfilePage({
     accountAgeMonths >= 3 &&
     user._count.Post >= 60;
 
-
   const isOwner = session?.user?.email === user.email;
 
-  // ── Niveau d'abonnement du visiteur ─────────────────────────────────────
+  // ── Viewer : role + tier en une seule requête ────────────────────────────
   let viewerTier: SubscriptionTier = "NONE";
+  let viewerRole: string | null = null;
 
   if (session?.user?.email && !isOwner) {
     const viewer = await prisma.user.findUnique({
       where: { email: session.user.email },
-      select: { id: true },
+      select: { id: true, role: true },
     });
     if (viewer) {
+      viewerRole = viewer.role;
       const sub = await prisma.subscription.findFirst({
         where: { subscriberId: viewer.id, creatorId: user.id, status: "ACTIVE" },
         select: { tier: true },
@@ -80,9 +81,10 @@ export default async function ProfilePage({
 
           <ProfileStats
             postCount={user._count.Post}
-            followerCount={user.Follow_Follow_followingIdToUser.length}  
+            followerCount={user.Follow_Follow_followingIdToUser.length}
             followingCount={user.Follow_Follow_followerIdToUser.length}
             username={user.username}
+            canViewList={isOwner || viewerRole === "ADMIN"}
           />
 
           {!isOwner && (

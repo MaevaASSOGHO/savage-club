@@ -18,7 +18,7 @@ function Stat({ value, label, onClick }: StatProps) {
   return (
     <div
       onClick={onClick}
-      className="bg-white/5 rounded-2xl py-3 flex flex-col items-center gap-0.5 cursor-pointer"
+      className={`bg-white/5 rounded-2xl py-3 flex flex-col items-center gap-0.5 ${onClick ? "cursor-pointer hover:bg-white/10" : "cursor-default"}`}
     >
       <span className="text-white font-black text-xl">{formatCount(value)}</span>
       <span className="text-white/40 text-xs">{label}</span>
@@ -31,20 +31,31 @@ interface Props {
   followerCount: number;
   followingCount: number;
   username: string;
+  canViewList?: boolean; 
 }
 
-export default function ProfileStats({ postCount, followerCount, followingCount, username }: Props) {
+export default function ProfileStats({ postCount, followerCount, followingCount, username, canViewList }: Props) {
   const [open, setOpen] = useState<"followers" | "following" | null>(null);
 
   return (
     <>
       <div className="grid grid-cols-3 gap-2 mb-6">
         <Stat value={postCount} label="publications" />
-        <Stat value={followerCount} label="abonnés" onClick={() => setOpen("followers")} />
-        <Stat value={followingCount} label="abonnements" onClick={() => setOpen("following")} />
+        <Stat
+          value={followerCount}
+          label="abonnés"
+          onClick={canViewList ? () => setOpen("followers") : undefined}
+        />
+        <Stat
+          value={followingCount}
+          label="abonnements"
+          onClick={canViewList ? () => setOpen("following") : undefined}
+        />
       </div>
 
-      {open && <FollowModal type={open} username={username} onClose={() => setOpen(null)} />}
+      {open && canViewList && (
+        <FollowModal type={open} username={username} onClose={() => setOpen(null)} />
+      )}
     </>
   );
 }
