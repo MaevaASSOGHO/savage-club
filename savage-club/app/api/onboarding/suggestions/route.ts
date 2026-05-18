@@ -37,6 +37,8 @@ export async function GET() {
           avatar:      true,
           isVerified:  true,
           category:    true,
+          subscriptionPrice: true,   
+          subscriptionVIP:   true, 
           _count:      { select: { Follow_Follow_followingIdToUser: true } },
         },
         orderBy: { Follow_Follow_followingIdToUser: { _count: "desc" } },
@@ -54,13 +56,15 @@ export async function GET() {
         role: { in: ["CREATOR", "TRAINER"] },
       },
       select: {
-        id:          true,
-        username:    true,
-        displayName: true,
-        avatar:      true,
-        isVerified:  true,
-        category:    true,
-        _count:      { select: { Follow_Follow_followingIdToUser: true } },
+        id:                true,
+        username:          true,
+        displayName:       true,
+        avatar:            true,
+        isVerified:        true,
+        category:          true,
+        subscriptionPrice: true,  // ← ajouté
+        subscriptionVIP:   true,  // ← ajouté
+        _count: { select: { Follow_Follow_followingIdToUser: true } },
       },
       orderBy: { Follow_Follow_followingIdToUser: { _count: "desc" } },
       take: MIN_SUGGESTIONS - suggestions.length,
@@ -70,13 +74,15 @@ export async function GET() {
 
   // Formater la réponse
   const result = suggestions.slice(0, MIN_SUGGESTIONS * 2).map(u => ({
-    id:             u.id,
-    username:       u.username,
-    displayName:    u.displayName,
-    avatar:         u.avatar,
-    isVerified:     u.isVerified,
-    category:       u.category ?? "Créateur",
-    followersCount: u._count.Follow_Follow_followingIdToUser,
+    id:                u.id,
+    username:          u.username,
+    displayName:       u.displayName,
+    avatar:            u.avatar,
+    isVerified:        u.isVerified,
+    category:          u.category ?? "Créateur",
+    followersCount:    u._count.Follow_Follow_followingIdToUser,
+    subscriptionPrice: u.subscriptionPrice ?? null,   // ← nouveau
+    subscriptionVIP:   u.subscriptionVIP   ?? null,   // ← nouveau
   }));
 
   return NextResponse.json(result);

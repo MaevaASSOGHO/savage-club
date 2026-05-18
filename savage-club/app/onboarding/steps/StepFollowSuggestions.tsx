@@ -2,16 +2,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import SubscribeModal from "@/components/profile/SubscribeModal";
 
 type SuggestedUser = {
-  id:           string;
-  username:     string;
-  displayName:  string | null;
-  avatar:       string | null;
-  isVerified:   boolean;
-  category:     string;
-  followersCount: number;
+  id:                string;
+  username:          string;
+  displayName:       string | null;
+  avatar:            string | null;
+  isVerified:        boolean;
+  category:          string;
+  followersCount:    number;
+  subscriptionPrice: number | null;
+  subscriptionVIP:   number | null;
 };
 
 type Props = { onNext: () => void };
@@ -21,6 +23,7 @@ export default function StepFollowSuggestions({ onNext }: Props) {
   const [followed, setFollowed] = useState<Set<string>>(new Set());
   const [loading,  setLoading]  = useState(true);
   const [saving,   setSaving]   = useState(false);
+  const [modalUser, setModalUser] = useState<SuggestedUser | null>(null);
 
   useEffect(() => {
     fetch("/api/onboarding/suggestions")
@@ -30,16 +33,9 @@ export default function StepFollowSuggestions({ onNext }: Props) {
       .finally(() => setLoading(false));
   }, []);
 
-  async function toggleFollow(userId: string) {
-    const next = new Set(followed);
-    if (next.has(userId)) {
-      next.delete(userId);
-      fetch(`/api/follow/${userId}`, { method: "DELETE" }).catch(() => {});
-    } else {
-      next.add(userId);
-      fetch(`/api/follow/${userId}`, { method: "POST" }).catch(() => {});
-    }
-    setFollowed(next);
+  function handleSubscribeSuccess(userId: string) {
+    setFollowed(prev => new Set(prev).add(userId));
+    setModalUser(null);
   }
 
   async function handleFinish() {
@@ -77,7 +73,6 @@ export default function StepFollowSuggestions({ onNext }: Props) {
                 key={user.id}
                 className="flex items-center gap-3 bg-white/5 border border-white/8 rounded-2xl px-4 py-3"
               >
-                {/* Avatar */}
                 <div className="w-11 h-11 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-white/10">
                   {user.avatar ? (
                     <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
@@ -88,7 +83,6 @@ export default function StepFollowSuggestions({ onNext }: Props) {
                   )}
                 </div>
 
-                {/* Infos */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="text-white font-semibold text-sm truncate">
@@ -107,12 +101,12 @@ export default function StepFollowSuggestions({ onNext }: Props) {
                   </p>
                 </div>
 
-                {/* Bouton follow */}
                 <button
-                  onClick={() => toggleFollow(user.id)}
+                  onClick={() => isFollowed ? null : setModalUser(user)}
+                  disabled={isFollowed}
                   className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
                     isFollowed
-                      ? "bg-white/10 text-white/50 border border-white/15"
+                      ? "bg-white/10 text-white/50 border border-white/15 cursor-default"
                       : "bg-amber-400 hover:bg-amber-300 text-black"
                   }`}
                 >
@@ -135,6 +129,20 @@ export default function StepFollowSuggestions({ onNext }: Props) {
           ? `Continuer avec ${followed.size} suivi${followed.size > 1 ? "s" : ""} →`
           : "Passer cette étape →"}
       </button>
+
+      {modalUser && (
+        <SubscribeModal
+          username={modalUser.username}
+          displayName={modalUser.displayName}
+          avatar={modalUser.avatar}
+          creatorId={modalUser.id}
+          savagePrice={modalUser.subscriptionPrice}
+          vipPrice={modalUser.subscriptionVIP}
+          currentTier="NONE"
+          onClose={() => setModalUser(null)}
+          onSuccess={() => handleSubscribeSuccess(modalUser.id)}
+        />
+      )}
     </div>
   );
 }
