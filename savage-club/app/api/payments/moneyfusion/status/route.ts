@@ -1,6 +1,8 @@
 // app/api/payments/moneyfusion/status/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { checkMFPaymentStatus }      from "@/lib/payments/providers/moneyfusion";
+import { captureApiError } from "@/lib/sentry";
+
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
@@ -10,6 +12,6 @@ export async function GET(req: NextRequest) {
     const data = await checkMFPaymentStatus(token);
     return NextResponse.json({ statut: data.data?.statut, data: data.data });
   } catch (err) {
-    return NextResponse.json({ error: "Erreur vérification" }, { status: 500 });
+    return captureApiError(err, { route: "moneyfusion/status" });
   }
 }

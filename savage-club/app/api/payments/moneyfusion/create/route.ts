@@ -3,6 +3,7 @@ import { getServerSession, authOptions } from "@/lib/auth-compat";
 import { NextRequest, NextResponse }     from "next/server";
 import { createMFPayment }               from "@/lib/payments/providers/moneyfusion";
 import { prisma }                        from "@/lib/prisma";
+import { captureApiError } from "@/lib/sentry";
 
 const APP_URL = process.env.NEXTAUTH_URL || "https://savage-club.vercel.app";
 
@@ -70,7 +71,6 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (err: any) {
-    console.error("[MF Create] Erreur:", err.message);
-    return NextResponse.json({ error: err.message ?? "Erreur inconnue" }, { status: 500 });
+  return captureApiError(err, { route: "moneyfusion/create" });
   }
 }

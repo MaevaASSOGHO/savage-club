@@ -3,6 +3,8 @@ import { getServerSession, authOptions } from "@/lib/auth-compat";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { sendPaymentConfirmationEmail } from "@/lib/emails/resend";
+import type { PaymentType } from "@prisma/client";
+import { captureApiError } from "@/lib/sentry";
 
 // ── GET /api/payments ─────────────────────────────────────────────────────
 // Retourne l'historique des paiements de l'utilisateur connecté
@@ -11,126 +13,139 @@ import { sendPaymentConfirmationEmail } from "@/lib/emails/resend";
 //   ?limit=20             (défaut: 20)
 //   ?cursor=<paymentId>   (pagination curseur)
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "Non connecté" }, { status: 401 });
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Non connecté" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const type   = searchParams.get("type") ?? "sent";
+    const limit  = Math.min(parseInt(searchParams.get("limit") ?? "20"), 50);
+    const cursor = searchParams.get("cursor");
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true },
+    });
+    if (!user) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
+
+    const where = type === "received"
+      ? { recipientId: user.id }
+      : { payerId: user.id };
+
+    const payments = await prisma.payment.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      select: {
+        id: true,
+        amount: true,
+        status: true,
+        type: true,
+        description: true,
+        createdAt: true,
+        User_Payment_payerIdToUser:      { select: { id: true, username: true, displayName: true, avatar: true } },
+        User_Payment_recipientIdToUser:  { select: { id: true, username: true, displayName: true, avatar: true } },
+        Subscription: { select: { tier: true } },
+      },
+    });
+
+    const hasMore    = payments.length > limit;
+    const items      = hasMore ? payments.slice(0, limit) : payments;
+    const nextCursor = hasMore ? items[items.length - 1].id : null;
+
+    return NextResponse.json({ payments: items, nextCursor, hasMore });
+
+  } catch (err) {
+    return captureApiError(err, { route: "payments/GET" });
   }
-
-  const { searchParams } = new URL(req.url);
-  const type   = searchParams.get("type") ?? "sent";
-  const limit  = Math.min(parseInt(searchParams.get("limit") ?? "20"), 50);
-  const cursor = searchParams.get("cursor");
-
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: { id: true },
-  });
-  if (!user) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
-
-  const where = type === "received"
-    ? { recipientId: user.id }
-    : { payerId: user.id };
-
-  const payments = await prisma.payment.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take: limit + 1,
-    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    select: {
-      id: true,
-      amount: true,
-      status: true,
-      type: true,
-      description: true,
-      createdAt: true,
-      User_Payment_payerIdToUser: { select: { id: true, username: true, displayName: true, avatar: true } },
-      User_Payment_recipientIdToUser: { select: { id: true, username: true, displayName: true, avatar: true } },
-      Subscription: { select: { tier: true } },
-    },
-  });
-
-  const hasMore = payments.length > limit;
-  const items   = hasMore ? payments.slice(0, limit) : payments;
-  const nextCursor = hasMore ? items[items.length - 1].id : null;
-
-  return NextResponse.json({ payments: items, nextCursor, hasMore });
 }
 
 // ── POST /api/payments ────────────────────────────────────────────────────
 // Enregistre un paiement one-shot (message, appel audio/vidéo, contenu perso)
 // Body: { recipientId, amount, type, description?, reference? }
+
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "Non connecté" }, { status: 401 });
-  }
-
-  const body = await req.json();
-  const { recipientId, amount, type, description, reference } = body;
-
-  const validTypes = ["MESSAGE", "AUDIO_CALL", "VIDEO_CALL", "CUSTOM_CONTENT"];
-  if (!recipientId || !validTypes.includes(type)) {
-    return NextResponse.json({ error: "Paramètres invalides" }, { status: 400 });
-  }
-  if (typeof amount !== "number" || amount < 0) {
-    return NextResponse.json({ error: "Montant invalide" }, { status: 400 });
-  }
-
-  const payer = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: { id: true },
-  });
-  if (!payer) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
-
-  if (payer.id === recipientId) {
-    return NextResponse.json({ error: "Impossible de se payer soi-même" }, { status: 400 });
-  }
-
-  const payment = await prisma.payment.create({
-    data: {
-      id: crypto.randomUUID(),
-      amount,
-      status: "SUCCESS",
-      type,
-      description: description ?? null,
-      reference: reference ?? null,
-      payerId: payer.id,
-      recipientId,
-    },
-    select: {
-      id: true,
-      amount: true,
-      status: true,
-      type: true,
-      description: true,
-      createdAt: true,
-    },
-  });
+  let recipientId: string | undefined;
+  let amount: number | undefined;
+  let type: string | undefined;
 
   try {
-    const [payerUser, recipientUser] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: payer.id },
-        select: { email: true, displayName: true, username: true },
-      }),
-      prisma.user.findUnique({
-        where: { id: recipientId },
-        select: { displayName: true, username: true },
-      }),
-    ]);
-
-    if (payerUser?.email && amount > 0) {
-      await sendPaymentConfirmationEmail(
-        payerUser.email,
-        payerUser.displayName ?? payerUser.username ?? "vous",
-        recipientUser?.displayName ?? recipientUser?.username ?? "le créateur",
-        amount,
-        type
-      ).catch((err) => console.error("Email paiement error:", err));
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Non connecté" }, { status: 401 });
     }
-  } catch (err) {
-    console.error("Erreur email paiement:", err);
-  }
 
-  return NextResponse.json(payment, { status: 201 });
+    const body = await req.json();
+    ({ recipientId, amount, type } = body);
+    const { description, reference } = body;
+
+    const validTypes: PaymentType[] = ["MESSAGE", "AUDIO_CALL", "VIDEO_CALL", "CUSTOM_CONTENT"];
+    if (!recipientId || !validTypes.includes(type as PaymentType)) {
+      return NextResponse.json({ error: "Paramètres invalides" }, { status: 400 });
+    }
+    if (typeof amount !== "number" || amount < 0) {
+      return NextResponse.json({ error: "Montant invalide" }, { status: 400 });
+    }
+
+    const payer = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true },
+    });
+    if (!payer) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
+
+    if (payer.id === recipientId) {
+      return NextResponse.json({ error: "Impossible de se payer soi-même" }, { status: 400 });
+    }
+
+    const payment = await prisma.payment.create({
+      data: {
+        id:          crypto.randomUUID(),
+        amount:      amount!,
+        status:      "SUCCESS",
+        type:        type as PaymentType,
+        description: description ?? null,
+        reference:   reference   ?? null,
+        payerId:     payer.id,
+        recipientId,
+      },
+      select: {
+        id: true, amount: true, status: true,
+        type: true, description: true, createdAt: true,
+      },
+    });
+
+    // Email — déjà dans son propre try/catch, c'est bien
+    try {
+      const [payerUser, recipientUser] = await Promise.all([
+        prisma.user.findUnique({
+          where:  { id: payer.id },
+          select: { email: true, displayName: true, username: true },
+        }),
+        prisma.user.findUnique({
+          where:  { id: recipientId },
+          select: { displayName: true, username: true },
+        }),
+      ]);
+
+      if (payerUser?.email && amount! > 0) {
+        await sendPaymentConfirmationEmail(
+          payerUser.email,
+          payerUser.displayName ?? payerUser.username ?? "vous",
+          recipientUser?.displayName ?? recipientUser?.username ?? "le créateur",
+          amount!,
+          type!
+        ).catch((err) => console.error("Email paiement error:", err));
+      }
+    } catch (err) {
+      console.error("Erreur email paiement:", err);
+    }
+
+    return NextResponse.json(payment, { status: 201 });
+
+  } catch (err) {
+    return captureApiError(err, { route: "payments/POST", recipientId, amount, type });
+  }
 }
