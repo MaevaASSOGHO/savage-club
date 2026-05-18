@@ -1,7 +1,7 @@
-// components/parametres/sections/SectionSupprimer.tsx
 "use client";
 
 import { useState } from "react";
+import { signOut } from "next-auth/react";
 import Field from "@/components/parametres/ui/Field";
 import Input from "@/components/parametres/ui/Input";
 import SaveButton from "@/components/parametres/ui/SaveButton";
@@ -12,15 +12,26 @@ const CONFIRMATION_WORD = "SUPPRIMER";
 export default function SectionSupprimer() {
   const [confirmed, setConfirmed] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const isValid = confirmed === CONFIRMATION_WORD;
 
   async function handleDelete() {
     if (!isValid) return;
     setLoading(true);
-    // TODO: appel API suppression
-    // await fetch("/api/account", { method: "DELETE" });
-    setLoading(false);
+    setError("");
+
+    try {
+      const res = await fetch("/api/account", { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Erreur lors de la suppression");
+      }
+      await signOut({ callbackUrl: "/" });
+    } catch (err: any) {
+      setError(err.message);
+      setLoading(false);
+    }
   }
 
   return (
@@ -48,6 +59,10 @@ export default function SectionSupprimer() {
             placeholder={CONFIRMATION_WORD}
           />
         </Field>
+
+        {error && (
+          <p className="text-red-400 text-xs">{error}</p>
+        )}
 
         <SaveButton
           loading={loading}
