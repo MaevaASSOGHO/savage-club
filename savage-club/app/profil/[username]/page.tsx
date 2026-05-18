@@ -75,13 +75,13 @@ export default async function ProfilePage({
             }}
             hasBadge={hasBadge}
             isOwner={isOwner}
-            followerCount={user.Follow_Follow_followerIdToUser.length}
+            followerCount={user.Follow_Follow_followingIdToUser.length}
           />
 
           <ProfileStats
             postCount={user._count.Post}
-            followerCount={user.Follow_Follow_followerIdToUser.length}
-            followingCount={user.Follow_Follow_followingIdToUser.length}
+            followerCount={user.Follow_Follow_followingIdToUser.length}  
+            followingCount={user.Follow_Follow_followerIdToUser.length}
             username={user.username}
           />
 
