@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   // Créer le commentaire
   const comment = await prisma.comment.create({
     data: { 
-      id:          crypto.randomUUID(),
+      id: crypto.randomUUID(),
       text, 
       postId, 
       userId: user.id,
@@ -59,5 +59,7 @@ export async function POST(req: Request) {
     });
   }
 
-  return NextResponse.json(comment);
+  // Normalise la réponse pour matcher le type du frontend
+  const { User, ...rest } = comment;
+  return NextResponse.json({ ...rest, user: User });
 }

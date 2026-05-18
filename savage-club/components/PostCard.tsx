@@ -280,11 +280,7 @@ export default function PostCard({ post, initialData = {} }: { post: Post; initi
       setComments((prev) => [...prev, newComment]);
       setCommentCount((c) => c + 1);
       setCommentText("");
-      await fetch("/api/notifications", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "COMMENT", postId: post.id, receiverId: post.user.id }),
-      });
+      // ← supprime le fetch /api/notifications ici, déjà fait dans la route
     }
     setSubmitting(false);
   }
